@@ -49,9 +49,12 @@
     @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
 
     /* Lightbox */
-    #lightbox { display:none; position:fixed; inset:0; background:rgba(28,25,23,.94);
-      z-index:9999; align-items:center; justify-content:center; }
-    #lightbox.open { display:flex; }
+    #lightbox { display:flex; position:fixed; inset:0; background:rgba(28,25,23,.94);
+      z-index:9999; align-items:center; justify-content:center;
+      opacity:0; pointer-events:none; transition:opacity .22s ease; }
+    #lightbox.open { opacity:1; pointer-events:auto; }
+    @keyframes lbIn { from { opacity:0; transform:scale(.93) } to { opacity:1; transform:scale(1) } }
+    body.anim-lightbox #lightbox.open #lightbox-img { animation: lbIn .24s cubic-bezier(.22,.68,0,1.1) forwards; }
     #lightbox-img { max-width:90vw; max-height:85vh; border-radius:.5rem; object-fit:contain; }
 
     /* Drop zone */
@@ -161,13 +164,72 @@
 
     /* Pill badge */
     .pill { font-size: .6875rem; font-weight: 600; padding: .2rem .6rem; border-radius: 99px; letter-spacing: .02em; }
+
+    /* Splash screen */
+    #splash {
+      position: fixed; inset: 0; z-index: 99999;
+      background: #FAFAF9;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      transition: opacity .55s ease;
+    }
+    #splash.splash-out { opacity: 0; pointer-events: none; }
+    #splash-inner { opacity: 0; }
+    #splash-inner.splash-animate { animation: splashIn .7s cubic-bezier(.22,.68,0,1.2) forwards; }
+    @keyframes splashIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .splash-dot {
+      display: inline-block; width: 5px; height: 5px; border-radius: 99px;
+      background: #D2BAB5; animation: splashPulse 1.3s ease-in-out infinite;
+    }
+    @keyframes splashPulse {
+      0%, 100% { opacity: .3; transform: scale(1); }
+      50%       { opacity: 1; transform: scale(1.25); }
+    }
+
+    /* Page & card transitions */
+    body.anim-page main { transition: opacity .2s ease; }
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .card-enter { animation: cardIn .36s cubic-bezier(.22,.68,0,1.1) both; }
+
+    /* Anim settings toggle */
+    .anim-toggle {
+      appearance: none; -webkit-appearance: none;
+      width: 2.4rem; height: 1.3rem; border-radius: 99px;
+      background: #D9D5D0; cursor: pointer; position: relative;
+      transition: background .2s; flex-shrink: 0;
+    }
+    .anim-toggle:checked { background: #A67E76; }
+    .anim-toggle::after {
+      content: ''; position: absolute; top: 3px; left: 3px;
+      width: .95rem; height: .95rem; border-radius: 50%; background: white;
+      transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.15);
+    }
+    .anim-toggle:checked::after { transform: translateX(1.1rem); }
   </style>
 </head>
 <body>
 
+<!-- ═══ SPLASH ════════════════════════════════════════════════════════════════ -->
+<div id="splash">
+  <div id="splash-inner" class="text-center select-none">
+    <p id="splash-title" class="font-serif font-semibold text-2xl text-sumi-800 tracking-[.12em]">路跑相簿</p>
+    <p class="text-xs text-sumi-400 tracking-[.18em] mt-2.5">攝影師與跑者的共同回憶</p>
+    <div class="flex items-center justify-center gap-2 mt-8">
+      <span class="splash-dot" style="animation-delay:0s"></span>
+      <span class="splash-dot" style="animation-delay:.22s"></span>
+      <span class="splash-dot" style="animation-delay:.44s"></span>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ HEADER ═══════════════════════════════════════════════════════════════ -->
 <header class="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-sumi-200">
-  <div class="max-w-6xl mx-auto px-6 py-4 flex flex-wrap items-center gap-4">
+  <div class="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-4 flex flex-wrap items-center gap-2 sm:gap-4">
 
     <!-- Logo + Breadcrumb -->
     <div class="flex items-center gap-2.5 min-w-0">
@@ -177,12 +239,12 @@
       </button>
       <span id="breadcrumb" class="hidden items-center gap-2 text-sm min-w-0">
         <span class="text-sumi-300 select-none">/</span>
-        <span id="breadcrumb-name" class="text-sakura-600 font-medium truncate max-w-xs"></span>
+        <span id="breadcrumb-name" class="text-sakura-600 font-medium truncate max-w-[100px] sm:max-w-xs"></span>
       </span>
     </div>
 
     <!-- Search -->
-    <div class="flex gap-2.5 ml-auto flex-1 max-w-sm">
+    <div class="flex gap-2 w-full sm:gap-2.5 sm:flex-1 sm:max-w-sm sm:ml-auto order-last sm:order-none">
       <input id="bib-input" type="text" maxlength="40"
         placeholder="搜尋相簿名稱…"
         class="jp-input flex-1 min-w-0 !py-2" />
@@ -193,7 +255,7 @@
     <button id="btn-nav-upload" class="hidden btn-ghost text-sm px-3 py-2 whitespace-nowrap">上傳</button>
 
     <!-- Auth area -->
-    <div id="auth-area" class="flex items-center gap-2">
+    <div id="auth-area" class="flex items-center gap-2 ml-auto sm:ml-0">
       <div id="auth-guest" class="flex gap-2">
         <button onclick="openAuthModal('login')" class="btn-ghost text-sm px-3 py-2">登入</button>
         <button onclick="openAuthModal('register')" class="btn-sakura text-sm px-3 py-2">註冊</button>
@@ -222,7 +284,7 @@
 </header>
 
 <!-- ═══ AUTH MODAL ══════════════════════════════════════════════════════════ -->
-<div id="auth-modal" class="modal-overlay" onclick="if(event.target===this)closeAuthModal()">
+<div id="auth-modal" class="modal-overlay" onclick="if(event.target===this && _overlayMousedownOnSelf)closeAuthModal()">
   <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
     <div class="px-6 pt-7 pb-5 text-center border-b border-sumi-100">
       <h2 class="font-serif font-bold text-sumi-800 text-xl mb-0.5" id="auth-site-title">路跑相簿</h2>
@@ -280,7 +342,7 @@
 </div>
 
 <!-- ═══ DELETE CONFIRM MODAL ════════════════════════════════════════════════ -->
-<div id="delete-modal" class="modal-overlay" onclick="if(event.target===this)closeDeleteModal()">
+<div id="delete-modal" class="modal-overlay" style="z-index:9200" onclick="if(event.target===this && _overlayMousedownOnSelf)closeDeleteModal()">
   <div class="bg-white rounded-xl shadow-xl w-full max-w-xs mx-4 p-6 text-center">
     <div class="w-10 h-10 rounded-full bg-red-50 border border-red-100 flex items-center justify-center mx-auto mb-4">
       <span class="text-red-500 font-bold text-sm select-none">!</span>
@@ -298,7 +360,7 @@
 </div>
 
 <!-- ═══ SETTINGS MODAL (帳號設定) ═══════════════════════════════════════════ -->
-<div id="settings-modal" class="modal-overlay" onclick="if(event.target===this)closeSettingsModal()">
+<div id="settings-modal" class="modal-overlay" onclick="if(event.target===this && _overlayMousedownOnSelf)closeSettingsModal()">
   <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
     <div class="px-6 py-4 border-b border-sumi-100 flex items-center justify-between">
       <div>
@@ -354,7 +416,7 @@
 </div>
 
 <!-- ═══ ADMIN MODAL ════════════════════════════════════════════════════════ -->
-<div id="admin-modal" class="modal-overlay" onclick="if(event.target===this)closeAdminModal()">
+<div id="admin-modal" class="modal-overlay" onclick="if(event.target===this && _overlayMousedownOnSelf)closeAdminModal()">
   <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden flex flex-col max-h-[90vh]">
     <!-- Header -->
     <div class="px-6 py-4 border-b border-sumi-100 flex items-center justify-between flex-shrink-0">
@@ -408,6 +470,65 @@
         </div>
 
         <p id="admin-settings-msg" class="hidden text-xs bg-green-50 text-green-700 rounded-md px-3 py-2"></p>
+
+        <!-- Animation Settings -->
+        <div class="border-t border-sumi-100 pt-6">
+          <p class="section-label mb-4">動畫與轉場</p>
+          <div class="space-y-5">
+
+            <!-- Splash -->
+            <div>
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-medium text-sumi-700">開場動畫</p>
+                  <p class="text-xs text-sumi-400 mt-0.5">進入網站時的全螢幕啟動畫面</p>
+                </div>
+                <input type="checkbox" id="anim-splash" class="anim-toggle" onchange="onAnimChange()" />
+              </div>
+              <div id="anim-splash-row" class="mt-3 flex items-center gap-3 transition-opacity">
+                <span class="text-xs text-sumi-500 whitespace-nowrap">最短顯示</span>
+                <input type="range" id="anim-splash-ms" min="300" max="2500" step="100"
+                  class="flex-1 accent-sakura-500 cursor-pointer" oninput="onAnimChange()" />
+                <span id="anim-splash-ms-val" class="text-xs text-sumi-500 w-14 text-right tabular-nums"></span>
+              </div>
+            </div>
+
+            <!-- Page transition -->
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-medium text-sumi-700">頁面切換淡入淡出</p>
+                <p class="text-xs text-sumi-400 mt-0.5">相簿、搜尋、上傳切換時的過場動畫</p>
+              </div>
+              <input type="checkbox" id="anim-page" class="anim-toggle" onchange="onAnimChange()" />
+            </div>
+
+            <!-- Card stagger -->
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-medium text-sumi-700">卡片入場動畫</p>
+                <p class="text-xs text-sumi-400 mt-0.5">相簿與照片卡片的交錯淡入效果</p>
+              </div>
+              <select id="anim-card" class="jp-input bg-white !w-20 text-sm" onchange="onAnimChange()">
+                <option value="0">停用</option>
+                <option value="20">快速</option>
+                <option value="35">普通</option>
+                <option value="60">慢速</option>
+              </select>
+            </div>
+
+            <!-- Lightbox -->
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-medium text-sumi-700">Lightbox 動畫</p>
+                <p class="text-xs text-sumi-400 mt-0.5">開啟與切換照片的縮放淡入效果</p>
+              </div>
+              <input type="checkbox" id="anim-lightbox-toggle" class="anim-toggle" onchange="onAnimChange()" />
+            </div>
+
+          </div>
+          <p id="anim-settings-msg" class="hidden text-xs bg-green-50 text-green-700 rounded-md px-3 py-2 mt-4">設定已套用並儲存</p>
+        </div>
+
       </div>
 
       <!-- Panel: User Management -->
@@ -455,7 +576,7 @@
 </div>
 
 <!-- ═══ FACTORY RESET MODAL ═══════════════════════════════════════════════ -->
-<div id="factory-reset-modal" class="modal-overlay" style="z-index:9100" onclick="if(event.target===this)closeFactoryResetModal()">
+<div id="factory-reset-modal" class="modal-overlay" style="z-index:9100" onclick="if(event.target===this && _overlayMousedownOnSelf)closeFactoryResetModal()">
   <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
     <div class="px-6 py-4 border-b border-sumi-100 flex items-center justify-between">
       <h3 class="font-serif font-semibold text-red-700">原廠重置系統</h3>
@@ -486,7 +607,7 @@
 </div>
 
 <!-- ═══ USER EDIT MODAL ═══════════════════════════════════════════════════ -->
-<div id="user-edit-modal" class="modal-overlay" style="z-index:9000" onclick="if(event.target===this)closeUserEditModal()">
+<div id="user-edit-modal" class="modal-overlay" style="z-index:9000" onclick="if(event.target===this && _overlayMousedownOnSelf)closeUserEditModal()">
   <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
     <div class="px-6 py-4 border-b border-sumi-100 flex items-center justify-between">
       <h3 class="font-serif font-semibold text-sumi-800">編輯用戶資料</h3>
@@ -523,10 +644,10 @@
 </div>
 
 <!-- ═══ MAIN ═══════════════════════════════════════════════════════════════ -->
-<main class="max-w-6xl mx-auto px-6 py-10">
+<main class="max-w-6xl mx-auto px-3 sm:px-6 py-8 sm:py-10">
 
   <!-- Tabs bar -->
-  <div id="tabs-bar" class="hidden mb-7 flex items-center gap-2.5">
+  <div id="tabs-bar" class="hidden mb-7 flex flex-wrap items-center gap-2 sm:gap-2.5">
     <button data-tab="all"
       class="tab-btn active px-4 py-1.5 rounded-full text-sm font-medium tracking-wide transition-all">全部照片</button>
     <button data-tab="unrecognized"
@@ -671,12 +792,12 @@
   </div>
 
   <!-- Album grid -->
-  <div id="album-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5"></div>
+  <div id="album-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5"></div>
 
 </main>
 
 <!-- ═══ LIGHTBOX ═════════════════════════════════════════════════════════════ -->
-<div id="lightbox" onclick="if(event.target===this)closeLightbox()">
+<div id="lightbox" onclick="if(event.target===this && _overlayMousedownOnSelf)closeLightbox()">
   <button onclick="lbPrev()" id="lb-prev"
     class="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white
            text-4xl select-none px-2 z-10 transition-colors">‹</button>
@@ -711,12 +832,57 @@
          rounded-full shadow-xl text-sm hidden z-50"></div>
 
 <!-- ═══ FOOTER ═══════════════════════════════════════════════════════════════ -->
-<footer class="max-w-6xl mx-auto px-6 py-10 mt-12 border-t border-sumi-200">
+<footer class="max-w-6xl mx-auto px-3 sm:px-6 py-10 mt-12 border-t border-sumi-200">
   <p class="text-center text-xs text-sumi-400 tracking-[.08em]" id="footer-title">路跑相簿 — 號碼牌辨識系統</p>
 </footer>
 
 <!-- ═══ JAVASCRIPT ════════════════════════════════════════════════════════════ -->
 <script>
+// ── Animation Settings ─────────────────────────────────────────────────────────
+const _animDefaults = { splash: true, splashMinMs: 900, pageTransition: true, cardStagger: 35, lightbox: true }
+let animSettings = (() => {
+  try { return { ..._animDefaults, ...JSON.parse(localStorage.getItem('rb_anim') || '{}') } }
+  catch { return { ..._animDefaults } }
+})()
+
+function applyAnimSettings() {
+  document.body.classList.toggle('anim-page',     animSettings.pageTransition)
+  document.body.classList.toggle('anim-lightbox', animSettings.lightbox)
+}
+
+function loadAnimSettingsPanel() {
+  $('anim-splash').checked           = animSettings.splash
+  $('anim-splash-ms').value          = animSettings.splashMinMs
+  $('anim-splash-ms-val').textContent = animSettings.splashMinMs + ' ms'
+  $('anim-page').checked             = animSettings.pageTransition
+  $('anim-card').value               = String(animSettings.cardStagger)
+  $('anim-lightbox-toggle').checked  = animSettings.lightbox
+  $('anim-splash-row').style.opacity = animSettings.splash ? '1' : '0.4'
+  $('anim-settings-msg').classList.add('hidden')
+}
+
+function onAnimChange() {
+  animSettings.splash          = $('anim-splash').checked
+  animSettings.splashMinMs     = parseInt($('anim-splash-ms').value)
+  animSettings.pageTransition  = $('anim-page').checked
+  animSettings.cardStagger     = parseInt($('anim-card').value)
+  animSettings.lightbox        = $('anim-lightbox-toggle').checked
+  $('anim-splash-ms-val').textContent = animSettings.splashMinMs + ' ms'
+  $('anim-splash-row').style.opacity  = animSettings.splash ? '1' : '0.4'
+  localStorage.setItem('rb_anim', JSON.stringify(animSettings))
+  applyAnimSettings()
+  const msg = $('anim-settings-msg')
+  msg.classList.remove('hidden')
+  clearTimeout(msg._t)
+  msg._t = setTimeout(() => msg.classList.add('hidden'), 2200)
+}
+
+// ── Overlay mousedown tracking (prevents drag-out-to-close bug) ────────────────
+let _overlayMousedownOnSelf = false
+document.addEventListener('mousedown', e => {
+  _overlayMousedownOnSelf = e.target.classList.contains('modal-overlay') || e.target.id === 'lightbox'
+})
+
 // ── Auth State ─────────────────────────────────────────────────────────────────
 // JWT is stored exclusively in an HttpOnly Secure SameSite=Strict cookie set by
 // the server — it is intentionally NOT accessible from JavaScript.
@@ -762,11 +928,15 @@ const S = {
 }
 
 // ── Site Settings ──────────────────────────────────────────────────────────────
-let siteSettings = { site_title: '路跑相簿', logo_url: null }
+let siteSettings = (() => {
+  try { return { site_title: '路跑相簿', logo_url: null, ...JSON.parse(localStorage.getItem('rb_site') || '{}') } }
+  catch { return { site_title: '路跑相簿', logo_url: null } }
+})()
 
 async function loadSiteSettings() {
   try {
     siteSettings = await _get('/api/settings')
+    localStorage.setItem('rb_site', JSON.stringify(siteSettings))
   } catch {}
   applySiteSettings()
 }
@@ -777,6 +947,8 @@ function applySiteSettings() {
   $('site-title').textContent = title
   $('auth-site-title').textContent = title
   $('footer-title').textContent = title + ' — 號碼牌辨識系統'
+  const splashTitle = $('splash-title')
+  if (splashTitle) splashTitle.textContent = title
 
   const logo = $('site-logo')
   const titleEl = $('site-title')
@@ -928,7 +1100,8 @@ document.addEventListener('click', e => {
   }
 })
 
-function logout() {
+async function logout() {
+  try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }) } catch {}
   Auth.clear()
   updateAuthUI()
   toast('已登出')
@@ -986,7 +1159,7 @@ async function submitRegister() {
   if (!display_name || !username || !email || !password) { showAuthError('reg', '請填寫所有欄位'); return }
   try {
     const data = await api.register(display_name, username, email, password)
-    Auth.save(data.token, data.user)
+    Auth.save(data.user)
     updateAuthUI()
     closeAuthModal()
     refreshAlbumSelect()
@@ -1042,7 +1215,7 @@ async function saveSettings() {
 
   try {
     const user = await api.updateProfile(data)
-    Auth.save(Auth.token, user)
+    Auth.save(user)
     updateAuthUI()
     showSettingsMsg('success', '設定已儲存')
     setTimeout(closeSettingsModal, 1500)
@@ -1099,6 +1272,7 @@ function openAdminModal() {
   switchAdminTab('settings')
   $('admin-modal').classList.add('open')
   loadAdminSettings()
+  loadAnimSettingsPanel()
   loadAdminUsers()
 }
 
@@ -1338,6 +1512,7 @@ function confirmDeleteAdminUser(userId, username) {
 
 // ── Navigation ─────────────────────────────────────────────────────────────────
 async function navHome() {
+  fadeMain(true)
   S.view = 'home'; S.album = null; S.bib = ''
   $('bib-input').value = ''
   $('bib-input').placeholder = '搜尋相簿名稱…'
@@ -1354,10 +1529,12 @@ async function navHome() {
     S.albums = await api.albums()
     renderAlbumGrid('')
   } catch(e) { toast(e.message) }
+  fadeMain(false)
 }
 
 function navUpload() {
   if (!Auth.isLoggedIn()) { openAuthModal('login'); return }
+  fadeMain(true)
   S.view = 'upload'; S.album = null; S.bib = ''
   $('bib-input').value = ''
   $('bib-input').placeholder = '搜尋相簿名稱…'
@@ -1376,6 +1553,7 @@ function navUpload() {
 
   showEl('upload-view', true)
   refreshAlbumSelect()
+  requestAnimationFrame(() => requestAnimationFrame(() => fadeMain(false)))
 }
 
 function renderAlbumGrid(query) {
@@ -1406,7 +1584,14 @@ function renderAlbumGrid(query) {
       </div>`
     return
   }
-  filtered.forEach(a => grid.appendChild(makeAlbumCard(a)))
+  filtered.forEach((a, i) => {
+    const card = makeAlbumCard(a)
+    if (animSettings.cardStagger > 0) {
+      card.style.animationDelay = Math.min(i * animSettings.cardStagger, 360) + 'ms'
+      card.classList.add('card-enter')
+    }
+    grid.appendChild(card)
+  })
 }
 
 async function navAlbum(album, tab = 'all') {
@@ -1425,7 +1610,7 @@ async function navAlbum(album, tab = 'all') {
   $('unrec-count').textContent = album.unrecognized_count > 0
     ? `(${album.unrecognized_count})` : ''
 
-  await loadStream(false)
+  await loadStream(false, true)
 
   if (!album.is_uncategorized) {
     _get(`/api/albums/${album.id}/progress`).then(prog => {
@@ -1437,6 +1622,7 @@ async function navAlbum(album, tab = 'all') {
 async function navSearch(bib) {
   if (!bib || !/^\d{1,6}$/.test(bib)) { toast('請輸入 1–6 位數字'); return }
   if (!S.album) return
+  fadeMain(true)
   S.view = 'search'; S.bib = bib
   S.photos = []; S.hasMore = false
 
@@ -1454,15 +1640,18 @@ async function navSearch(bib) {
     $('search-count').textContent = `共 ${data.count} 張`
     if (!data.count) {
       showEmpty(true, `找不到號碼 ${bib} 的照片`, '照片可能尚未上傳，或號碼辨識未涵蓋到')
+      fadeMain(false)
       return
     }
     setGridVisible(true)
     appendPhotos(data.photos)
     $('btn-back-search').onclick = () => S.album ? navAlbum(S.album, S.tab) : navHome()
   } catch(e) { showSkeleton(false); toast(e.message) }
+  fadeMain(false)
 }
 
-async function loadStream(append = false) {
+async function loadStream(append = false, fade = false) {
+  if (fade && !append) fadeMain(true)
   if (!append) {
     clearGrid(); showSkeleton(true); showEl('load-more-wrap', false); showEmpty(false)
   }
@@ -1477,6 +1666,7 @@ async function loadStream(append = false) {
       showEmpty(true,
         unrec ? '沒有未辨識的照片' : '這個相簿還沒有照片',
         unrec ? '所有照片都已成功辨識號碼' : Auth.isLoggedIn() ? '請點擊上方「上傳」上傳照片' : '請聯絡攝影師上傳照片')
+      if (fade && !append) fadeMain(false)
       return
     }
 
@@ -1485,6 +1675,7 @@ async function loadStream(append = false) {
     appendPhotos(data.photos)
     showEl('load-more-wrap', S.hasMore)
   } catch(e) { showSkeleton(false); toast(e.message) }
+  if (fade && !append) fadeMain(false)
 }
 
 // ── Grid rendering ─────────────────────────────────────────────────────────────
@@ -1524,11 +1715,17 @@ window.addEventListener('resize', () => {
 
 function appendPhotos(photos) {
   if (!masonryCols.length) buildMasonryCols()
-  photos.forEach(photo => {
+  photos.forEach((photo, batchIdx) => {
     let idx = S.photos.indexOf(photo)
     if (idx === -1) idx = S.photos.length - photos.length
     const card = makePhotoCard(photo, idx)
-    if (card) masonryCols[idx % masonryCols.length].appendChild(card)
+    if (card) {
+      if (animSettings.cardStagger > 0) {
+        card.style.animationDelay = Math.min(batchIdx * animSettings.cardStagger, 350) + 'ms'
+        card.classList.add('card-enter')
+      }
+      masonryCols[idx % masonryCols.length].appendChild(card)
+    }
   })
 }
 
@@ -1604,7 +1801,7 @@ function makeAlbumCard(album) {
 
   card.innerHTML = `
     <div class="${accentColor} h-1"></div>
-    <div class="p-5">
+    <div class="p-3 sm:p-5">
       <h3 class="font-medium ${isUncategorized ? 'text-sumi-400' : 'text-sumi-800'} leading-snug text-sm mb-2.5 tracking-wide">${esc(album.name)}</h3>
       ${album.event_date ? `<p class="text-xs text-sumi-400 mb-1 tracking-wide">${album.event_date}</p>` : ''}
       ${album.description ? `<p class="text-xs text-sumi-400 truncate mb-2.5">${esc(album.description)}</p>` : ''}
@@ -1665,7 +1862,13 @@ function lbNext() { if (S.lbIdx < S.photos.length - 1) { S.lbIdx++; renderLightb
 function renderLightbox() {
   const p = S.photos[S.lbIdx]
   if (!p) return
-  $('lightbox-img').src = p.url
+  const img = $('lightbox-img')
+  if (animSettings.lightbox) {
+    img.style.animation = 'none'
+    img.getBoundingClientRect()
+    img.style.animation = ''
+  }
+  img.src = p.url
   $('lb-filename').textContent = p.original_filename
   $('lb-bibs').textContent = p.bib_numbers.length ? `號碼：${p.bib_numbers.join(', ')}` : '（未辨識）'
   $('lb-counter').textContent = `${S.lbIdx + 1} / ${S.photos.length}`
@@ -1842,7 +2045,7 @@ document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
   btn.addEventListener('click', async () => {
     S.tab = btn.dataset.tab; S.page = 1
     setActiveTab(S.tab)
-    await loadStream(false)
+    await loadStream(false, true)
   })
 })
 
@@ -1941,12 +2144,17 @@ function _uploadXhr(fd, onProgress) {
     })
     xhr.addEventListener('error', () => reject(new Error('網路錯誤')))
     xhr.open('POST', '/api/upload')
-    if (Auth.token) xhr.setRequestHeader('Authorization', `Bearer ${Auth.token}`)
+    xhr.withCredentials = true
     xhr.send(fd)
   })
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
+function fadeMain(out) {
+  if (!animSettings.pageTransition) return
+  document.querySelector('main').style.opacity = out ? '0' : '1'
+}
+
 function $(id) { return document.getElementById(id) }
 
 function esc(str) {
@@ -1957,6 +2165,7 @@ function showEl(id, show) {
   const el = $(id); if (!el) return
   el.classList.toggle('hidden', !show)
   if (show && el.classList.contains('flex')) el.style.display = 'flex'
+  else if (!show) el.style.display = ''
 }
 
 function setHeader(showCrumb, name = '') {
@@ -1969,6 +2178,7 @@ function showTabsBar(show) {
   const el = $('tabs-bar')
   el.classList.toggle('hidden', !show)
   if (show) el.style.display = 'flex'
+  else el.style.display = ''
 }
 
 function clearGrid() { buildMasonryCols() }
@@ -2006,17 +2216,32 @@ async function refreshAlbumSelect(autoSelectId = null) {
 
 // ── Init ───────────────────────────────────────────────────────────────────────
 async function init() {
+  applyAnimSettings()
+  applySiteSettings()
+  const splashStart = Date.now()
+  const splash = $('splash')
+  if (!animSettings.splash) splash.style.display = 'none'
+
   await loadSiteSettings()
+  if (animSettings.splash) $('splash-inner').classList.add('splash-animate')
+
   if (Auth.isLoggedIn()) {
     try {
       const me = await api.me()
-      Auth.save(Auth.token, me)
+      Auth.save(me)
     } catch {
       Auth.clear()
     }
   }
   updateAuthUI()
-  navHome()
+  await navHome()
+
+  if (animSettings.splash) {
+    const remaining = animSettings.splashMinMs - (Date.now() - splashStart)
+    if (remaining > 0) await new Promise(r => setTimeout(r, remaining))
+    splash.classList.add('splash-out')
+    setTimeout(() => { splash.style.display = 'none' }, 580)
+  }
 }
 
 init()
