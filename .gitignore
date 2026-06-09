@@ -1,0 +1,10 @@
+# Secrets / local config
+.env
+.secret_key
+
+# Runtime data
+bib_recognition.db
+uploads/
+settings.json
+__pycache__/
+venv/

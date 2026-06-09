@@ -1,0 +1,22 @@
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+Pillow>=10.0.0
+pytesseract>=0.3.10
+opencv-python>=4.8.0
+sqlalchemy>=2.0.0
+aiofiles>=23.0.0
+python-dotenv>=1.0.0
+numpy>=1.24.0
+python-jose[cryptography]>=3.3.0
+bcrypt>=4.0.0
+# GPU-accelerated OCR (recommended — dramatically better accuracy)
+# IMPORTANT: install torch with CUDA BEFORE easyocr for GPU support:
+#   nvidia-smi                              ← check your CUDA version
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121   ← CUDA 12.x
+#   pip install torch --index-url https://download.pytorch.org/whl/cu118   ← CUDA 11.8
+easyocr>=1.7.1
+# Optional: Claude Vision API (cloud, highest accuracy)
+# anthropic>=0.40.0
+# Optional: Google Cloud Vision API (cloud)
+# google-cloud-vision>=3.4.0

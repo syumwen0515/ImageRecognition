@@ -1,0 +1,2025 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>路跑相簿 | 號碼牌搜尋</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600;700&family=Noto+Sans+JP:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            sakura: { 50:'#FAF6F5', 100:'#F2EAE8', 200:'#E5D6D3', 300:'#D2BAB5', 400:'#BB9991', 500:'#A67E76', 600:'#8C6760', 700:'#6F4F4A', 800:'#543B37', 900:'#3A2826' },
+            sumi:   { 50:'#FAFAF9', 100:'#F4F3F1', 200:'#E7E4E0', 300:'#C9C5BE', 400:'#9C9590', 500:'#7A736D', 600:'#58524C', 700:'#45403B', 800:'#2B2724', 900:'#1C1917' },
+          },
+          fontFamily: { jp: ['"Noto Sans JP"', 'sans-serif'], serif: ['"Noto Serif JP"', 'serif'] },
+        }
+      }
+    }
+  </script>
+  <style>
+    * { font-family: 'Noto Sans JP', sans-serif; }
+    body { background: #FAFAF9; color: #1C1917; line-height: 1.65; }
+    h1, h2, h3 { line-height: 1.4; }
+
+    /* Masonry */
+    .masonry { display: flex; align-items: flex-start; gap: 1rem; }
+    .masonry-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1rem; }
+    .masonry-item { position: relative; }
+    .masonry-item img { width: 100%; display: block; border-radius: .375rem; }
+    .masonry-skeleton { columns: 4 200px; column-gap: 1rem; }
+    .masonry-skeleton .masonry-item { break-inside: avoid; margin-bottom: 1rem; }
+    .masonry-item:hover .photo-overlay { opacity: 1; }
+    .photo-overlay {
+      position: absolute; inset: 0; border-radius: .375rem;
+      background: linear-gradient(to top, rgba(28,25,23,.68) 0%, transparent 55%);
+      opacity: 0; transition: opacity .25s;
+      display: flex; flex-direction: column; justify-content: flex-end; padding: .75rem;
+    }
+
+    /* Skeleton */
+    .skeleton {
+      background: linear-gradient(90deg,#E7E5E0 25%,#F4F3F0 50%,#E7E5E0 75%);
+      background-size: 200% 100%; animation: shimmer 1.4s infinite; border-radius: .5rem;
+    }
+    @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+
+    /* Lightbox */
+    #lightbox { display:none; position:fixed; inset:0; background:rgba(28,25,23,.94);
+      z-index:9999; align-items:center; justify-content:center; }
+    #lightbox.open { display:flex; }
+    #lightbox-img { max-width:90vw; max-height:85vh; border-radius:.5rem; object-fit:contain; }
+
+    /* Drop zone */
+    #drop-zone.dragging { border-color:#A67E76; background:#FAF6F5; }
+
+    /* Modal */
+    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(28,25,23,.48);
+      z-index:8888; align-items:center; justify-content:center; backdrop-filter:blur(3px); }
+    .modal-overlay.open { display:flex; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #F4F3F0; }
+    ::-webkit-scrollbar-thumb { background: #C8C4BC; border-radius: 99px; }
+
+    /* Album card */
+    .album-card { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+    .album-card:hover { transform: translateY(-2px); border-color: #D2BAB5; box-shadow: 0 8px 24px rgba(58,40,38,.07); }
+
+    /* Inputs */
+    .jp-input {
+      border: 1px solid #D9D5D0; border-radius: .375rem; padding: .5rem .75rem;
+      font-size: .875rem; width: 100%; transition: border-color .18s, box-shadow .18s;
+      background: white; color: #1C1917;
+    }
+    .jp-input:focus { outline: none; border-color: #A67E76; box-shadow: 0 0 0 3px rgba(166,126,118,.08); }
+
+    /* Buttons */
+    .btn-primary {
+      background: #1C1917; color: white; font-weight: 500; font-size: .8125rem;
+      padding: .55rem 1.35rem; border-radius: .375rem; transition: all .18s; border: none; cursor: pointer;
+      letter-spacing: .04em;
+    }
+    .btn-primary:hover { background: #45403B; }
+    .btn-primary:active { transform: scale(.97); }
+    .btn-primary:disabled { opacity: .35; cursor: not-allowed; }
+
+    .btn-sakura {
+      background: #A67E76; color: white; font-weight: 500; font-size: .8125rem;
+      padding: .55rem 1.35rem; border-radius: .375rem; transition: all .18s; border: none; cursor: pointer;
+      letter-spacing: .04em;
+    }
+    .btn-sakura:hover { background: #8C6760; }
+    .btn-sakura:active { transform: scale(.97); }
+    .btn-sakura:disabled { opacity: .35; cursor: not-allowed; }
+
+    .btn-ghost {
+      background: transparent; color: #58524C; font-weight: 500; font-size: .8125rem;
+      padding: .55rem 1.1rem; border-radius: .375rem; transition: all .18s;
+      border: 1px solid #D9D5D0; cursor: pointer; letter-spacing: .04em;
+    }
+    .btn-ghost:hover { background: #F4F3F1; border-color: #C9C5BE; color: #1C1917; }
+
+    .btn-danger-sm {
+      background: transparent; color: #DC2626; font-size: .75rem; font-weight: 500;
+      padding: .25rem .6rem; border-radius: .3rem; transition: all .15s;
+      border: 1px solid #FECACA; cursor: pointer;
+    }
+    .btn-danger-sm:hover { background: #FEF2F2; border-color: #FCA5A5; }
+
+    /* Toast */
+    #toast { transition: opacity .3s; }
+
+    /* Tabs */
+    .tab-btn.active { background: #1C1917; color: white; }
+    .tab-btn:not(.active) { background: white; color: #58524C; border: 1px solid #E7E4E0; }
+    .tab-btn:not(.active):hover { background: #F4F3F1; }
+
+    /* Admin tab underline style */
+    .admin-tab { border-bottom: 2px solid transparent; padding: .65rem 1.1rem; font-size: .875rem;
+      font-weight: 500; color: #7A736D; transition: all .18s; cursor: pointer; background: none;
+      border-left: none; border-right: none; border-top: none; letter-spacing: .02em; }
+    .admin-tab.active { border-bottom-color: #A67E76; color: #1C1917; }
+    .admin-tab:hover:not(.active) { color: #45403B; }
+
+    /* Auth dropdown */
+    .user-dropdown { display: none; position: absolute; right: 0; top: calc(100% + 6px);
+      background: white; border: 1px solid #E7E5E0; border-radius: .5rem;
+      box-shadow: 0 8px 24px rgba(28,25,23,.1); min-width: 160px; z-index: 999; overflow: hidden; }
+    .user-dropdown.open { display: block; }
+    .user-dropdown a, .user-dropdown button {
+      display: block; width: 100%; text-align: left; padding: .6rem 1rem;
+      font-size: .875rem; color: #1C1917; transition: background .12s; cursor: pointer;
+      border: none; background: none;
+    }
+    .user-dropdown a:hover, .user-dropdown button:hover { background: #F4F3F0; }
+    .user-dropdown a.hidden, .user-dropdown button.hidden { display: none; }
+
+    /* Upload card */
+    .upload-card {
+      background: white; border-radius: .625rem; border: 1px solid #E7E4E0;
+      padding: 1.5rem; box-shadow: 0 1px 3px rgba(28,25,23,.03);
+    }
+
+    /* OCR spinner (CSS only, no emoji) */
+    .spin { display: inline-block; animation: spin 1.2s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Section label */
+    .section-label {
+      font-size: .6875rem; font-weight: 600; letter-spacing: .12em;
+      text-transform: uppercase; color: #9C9590;
+    }
+
+    /* User table */
+    #admin-users-tbody tr { border-bottom: 1px solid #F4F3F1; }
+
+    /* Pill badge */
+    .pill { font-size: .6875rem; font-weight: 600; padding: .2rem .6rem; border-radius: 99px; letter-spacing: .02em; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══════════════════════════════════════════════════════════════ -->
+<header class="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-sumi-200">
+  <div class="max-w-6xl mx-auto px-6 py-4 flex flex-wrap items-center gap-4">
+
+    <!-- Logo + Breadcrumb -->
+    <div class="flex items-center gap-2.5 min-w-0">
+      <button id="btn-home" class="flex items-center gap-3 hover:opacity-70 transition-opacity">
+        <img id="site-logo" src="" alt="Logo" class="h-8 hidden object-contain" />
+        <span id="site-title" class="font-serif font-semibold text-lg text-sumi-800 tracking-[.06em] whitespace-nowrap">路跑相簿</span>
+      </button>
+      <span id="breadcrumb" class="hidden items-center gap-2 text-sm min-w-0">
+        <span class="text-sumi-300 select-none">/</span>
+        <span id="breadcrumb-name" class="text-sakura-600 font-medium truncate max-w-xs"></span>
+      </span>
+    </div>
+
+    <!-- Search -->
+    <div class="flex gap-2.5 ml-auto flex-1 max-w-sm">
+      <input id="bib-input" type="text" maxlength="40"
+        placeholder="搜尋相簿名稱…"
+        class="jp-input flex-1 min-w-0 !py-2" />
+      <button id="btn-search" class="btn-primary whitespace-nowrap px-5">搜尋</button>
+    </div>
+
+    <!-- Upload button -->
+    <button id="btn-nav-upload" class="hidden btn-ghost text-sm px-3 py-2 whitespace-nowrap">上傳</button>
+
+    <!-- Auth area -->
+    <div id="auth-area" class="flex items-center gap-2">
+      <div id="auth-guest" class="flex gap-2">
+        <button onclick="openAuthModal('login')" class="btn-ghost text-sm px-3 py-2">登入</button>
+        <button onclick="openAuthModal('register')" class="btn-sakura text-sm px-3 py-2">註冊</button>
+      </div>
+      <div id="auth-user" class="hidden relative">
+        <button id="user-menu-btn" onclick="toggleUserMenu()"
+          class="flex items-center gap-2 px-3 py-2 rounded-md border border-sumi-200
+                 hover:bg-sumi-50 transition-colors text-sm font-medium text-sumi-700">
+          <span class="w-6 h-6 rounded-full bg-sakura-100 text-sakura-600 flex items-center justify-center text-xs font-bold" id="user-avatar"></span>
+          <span id="user-name-display"></span>
+          <span id="admin-badge" class="hidden pill bg-sakura-100 text-sakura-700">管理員</span>
+          <span class="text-sumi-400 text-xs select-none">▾</span>
+        </button>
+        <div id="user-dropdown" class="user-dropdown">
+          <div class="px-4 py-2.5 border-b border-sumi-100">
+            <p class="text-xs text-sumi-400">登入身份</p>
+            <p class="font-semibold text-sm text-sumi-800" id="dropdown-username"></p>
+          </div>
+          <button onclick="openSettingsModal()">帳號設定</button>
+          <button id="btn-admin-panel" class="hidden" onclick="openAdminModal()">管理控制台</button>
+          <button onclick="logout()" class="!text-red-600 hover:!bg-red-50">登出</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ═══ AUTH MODAL ══════════════════════════════════════════════════════════ -->
+<div id="auth-modal" class="modal-overlay" onclick="if(event.target===this)closeAuthModal()">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+    <div class="px-6 pt-7 pb-5 text-center border-b border-sumi-100">
+      <h2 class="font-serif font-bold text-sumi-800 text-xl mb-0.5" id="auth-site-title">路跑相簿</h2>
+      <p class="text-sumi-400 text-xs">攝影師與跑者的共同回憶</p>
+    </div>
+    <div class="flex border-b border-sumi-100">
+      <button id="tab-login" onclick="switchAuthTab('login')"
+        class="flex-1 py-3 text-sm font-semibold transition-colors tab-btn active border-b-2"
+        data-tab="login">登入</button>
+      <button id="tab-register" onclick="switchAuthTab('register')"
+        class="flex-1 py-3 text-sm font-semibold transition-colors tab-btn border-b-2"
+        data-tab="register">註冊</button>
+    </div>
+    <div class="p-6 space-y-4">
+      <!-- Login -->
+      <div id="form-login" class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-sumi-500 mb-1">帳號 / Email</label>
+          <input id="login-identifier" type="text" autocomplete="username" class="jp-input" placeholder="請輸入帳號或 Email" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-sumi-500 mb-1">密碼</label>
+          <input id="login-password" type="password" autocomplete="current-password" class="jp-input" placeholder="請輸入密碼"
+            onkeydown="if(event.key==='Enter')submitLogin()" />
+        </div>
+        <button onclick="submitLogin()" class="btn-primary w-full py-2.5 mt-1">登入</button>
+        <p id="login-error" class="hidden text-xs text-red-500 text-center"></p>
+      </div>
+      <!-- Register -->
+      <div id="form-register" class="hidden space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-sumi-500 mb-1">顯示名稱</label>
+          <input id="reg-display-name" type="text" autocomplete="name" class="jp-input" placeholder="登入後顯示的名字" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-sumi-500 mb-1">帳號</label>
+          <input id="reg-username" type="text" autocomplete="username" class="jp-input" placeholder="登入用，至少 2 個字元" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-sumi-500 mb-1">Email</label>
+          <input id="reg-email" type="email" autocomplete="email" class="jp-input" placeholder="your@email.com" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-sumi-500 mb-1">密碼</label>
+          <input id="reg-password" type="password" autocomplete="new-password" class="jp-input" placeholder="至少 6 個字元"
+            onkeydown="if(event.key==='Enter')submitRegister()" />
+        </div>
+        <button onclick="submitRegister()" class="btn-primary w-full py-2.5 mt-1">建立帳號</button>
+        <p id="reg-error" class="hidden text-xs text-red-500 text-center"></p>
+      </div>
+    </div>
+    <button onclick="closeAuthModal()"
+      class="absolute top-3 right-4 text-sumi-400 hover:text-sumi-700 text-xl font-light leading-none">×</button>
+  </div>
+</div>
+
+<!-- ═══ DELETE CONFIRM MODAL ════════════════════════════════════════════════ -->
+<div id="delete-modal" class="modal-overlay" onclick="if(event.target===this)closeDeleteModal()">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-xs mx-4 p-6 text-center">
+    <div class="w-10 h-10 rounded-full bg-red-50 border border-red-100 flex items-center justify-center mx-auto mb-4">
+      <span class="text-red-500 font-bold text-sm select-none">!</span>
+    </div>
+    <h3 class="font-bold text-sumi-800 text-base mb-1" id="delete-title">確認刪除</h3>
+    <p class="text-sm text-sumi-500 mb-5" id="delete-msg">此操作無法復原。</p>
+    <div class="flex gap-3">
+      <button onclick="closeDeleteModal()" class="btn-ghost flex-1 py-2">取消</button>
+      <button id="btn-confirm-delete"
+        class="flex-1 py-2 rounded-md bg-red-600 hover:bg-red-700 text-white font-semibold text-sm transition-colors">
+        確認刪除
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SETTINGS MODAL (帳號設定) ═══════════════════════════════════════════ -->
+<div id="settings-modal" class="modal-overlay" onclick="if(event.target===this)closeSettingsModal()">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+    <div class="px-6 py-4 border-b border-sumi-100 flex items-center justify-between">
+      <div>
+        <h2 class="font-serif font-semibold text-sumi-800 text-lg">帳號設定</h2>
+        <p class="text-xs text-sumi-400 mt-0.5">更新您的個人資料</p>
+      </div>
+      <button onclick="closeSettingsModal()" class="text-sumi-400 hover:text-sumi-700 text-2xl leading-none">×</button>
+    </div>
+    <div class="p-6 space-y-5">
+      <div>
+        <p class="section-label mb-3">基本資料</p>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-sumi-500 mb-1">顯示名稱</label>
+            <input id="settings-display-name" type="text" class="jp-input" placeholder="登入後顯示的名字" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-sumi-500 mb-1">Email</label>
+            <input id="settings-email" type="email" class="jp-input" placeholder="your@email.com" />
+          </div>
+        </div>
+      </div>
+      <div class="border-t border-sumi-100 pt-5">
+        <p class="section-label mb-0.5">變更密碼</p>
+        <p class="text-xs text-sumi-300 mb-3">留空則不變更密碼</p>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-sumi-500 mb-1">目前密碼</label>
+            <input id="settings-current-password" type="password" autocomplete="current-password"
+              class="jp-input" placeholder="請輸入目前密碼" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-sumi-500 mb-1">新密碼</label>
+            <input id="settings-new-password" type="password" autocomplete="new-password"
+              class="jp-input" placeholder="至少 6 個字元" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-sumi-500 mb-1">確認新密碼</label>
+            <input id="settings-confirm-password" type="password" autocomplete="new-password"
+              class="jp-input" placeholder="再次輸入新密碼"
+              onkeydown="if(event.key==='Enter')saveSettings()" />
+          </div>
+        </div>
+      </div>
+      <p id="settings-error" class="hidden text-xs text-red-500 bg-red-50 rounded-md px-3 py-2"></p>
+      <p id="settings-success" class="hidden text-xs text-green-700 bg-green-50 rounded-md px-3 py-2"></p>
+      <div class="flex gap-3 pt-1">
+        <button onclick="closeSettingsModal()" class="btn-ghost flex-1 py-2.5">取消</button>
+        <button onclick="saveSettings()" class="btn-sakura flex-1 py-2.5">儲存設定</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ADMIN MODAL ════════════════════════════════════════════════════════ -->
+<div id="admin-modal" class="modal-overlay" onclick="if(event.target===this)closeAdminModal()">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl mx-4 overflow-hidden flex flex-col max-h-[90vh]">
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-sumi-100 flex items-center justify-between flex-shrink-0">
+      <div>
+        <h2 class="font-serif font-semibold text-sumi-800 text-lg">管理控制台</h2>
+        <p class="text-xs text-sumi-400 mt-0.5">網站設定與用戶管理</p>
+      </div>
+      <button onclick="closeAdminModal()" class="text-sumi-400 hover:text-sumi-700 text-2xl leading-none">×</button>
+    </div>
+    <!-- Tabs -->
+    <div class="flex border-b border-sumi-100 flex-shrink-0">
+      <button id="admin-tab-settings" class="admin-tab active" onclick="switchAdminTab('settings')">網站設定</button>
+      <button id="admin-tab-users" class="admin-tab" onclick="switchAdminTab('users')">使用者管理</button>
+      <button id="admin-tab-danger" class="admin-tab" onclick="switchAdminTab('danger')">危險區域</button>
+    </div>
+    <!-- Content -->
+    <div class="overflow-y-auto flex-1">
+
+      <!-- Panel: Site Settings -->
+      <div id="admin-panel-settings" class="p-6 space-y-6">
+
+        <!-- Title -->
+        <div>
+          <p class="section-label mb-3">網站標題</p>
+          <div class="flex gap-3">
+            <input id="admin-site-title" type="text" class="jp-input flex-1" placeholder="路跑相簿" />
+            <button onclick="saveAdminSettings()" class="btn-primary whitespace-nowrap px-5">儲存</button>
+          </div>
+          <p class="text-xs text-sumi-400 mt-1.5">此名稱將顯示在網站標頭與瀏覽器分頁。</p>
+        </div>
+
+        <!-- Logo -->
+        <div class="border-t border-sumi-100 pt-6">
+          <p class="section-label mb-3">網站 Logo</p>
+          <div class="flex items-start gap-4 flex-wrap">
+            <div class="flex-shrink-0">
+              <div class="w-24 h-24 rounded-md border border-sumi-200 bg-sumi-50 flex items-center justify-center overflow-hidden">
+                <img id="logo-preview" src="" alt="Logo 預覽" class="hidden w-full h-full object-contain" />
+                <span id="logo-placeholder" class="text-xs text-sumi-400 text-center px-2">尚未設定 Logo</span>
+              </div>
+            </div>
+            <div class="space-y-2 flex-1 min-w-0">
+              <label class="block">
+                <span class="btn-ghost cursor-pointer inline-block text-sm px-4 py-2">選擇圖片檔案</span>
+                <input id="logo-input" type="file" accept="image/*" class="hidden" onchange="uploadLogo()" />
+              </label>
+              <button id="btn-remove-logo" onclick="removeLogo()" class="hidden btn-danger-sm">移除 Logo</button>
+              <p class="text-xs text-sumi-400">支援 JPG、PNG、WebP 格式。建議使用正方形或橫向圖片。</p>
+            </div>
+          </div>
+        </div>
+
+        <p id="admin-settings-msg" class="hidden text-xs bg-green-50 text-green-700 rounded-md px-3 py-2"></p>
+      </div>
+
+      <!-- Panel: User Management -->
+      <div id="admin-panel-users" class="hidden p-6">
+        <div class="flex items-center gap-3 mb-4">
+          <input id="admin-user-search" type="text" class="jp-input max-w-xs"
+            placeholder="搜尋帳號、姓名或 Email…"
+            oninput="renderAdminUsers(this.value)" />
+          <span id="admin-user-count" class="text-sm text-sumi-400 ml-auto"></span>
+        </div>
+        <div class="overflow-x-auto rounded-md border border-sumi-200">
+          <table class="w-full text-sm">
+            <thead class="bg-sumi-50 border-b border-sumi-200">
+              <tr>
+                <th class="text-left px-4 py-2.5 text-xs font-semibold text-sumi-500 whitespace-nowrap">帳號</th>
+                <th class="text-left px-4 py-2.5 text-xs font-semibold text-sumi-500 whitespace-nowrap">顯示名稱</th>
+                <th class="text-left px-4 py-2.5 text-xs font-semibold text-sumi-500 whitespace-nowrap">Email</th>
+                <th class="text-left px-4 py-2.5 text-xs font-semibold text-sumi-500 whitespace-nowrap">角色</th>
+                <th class="text-left px-4 py-2.5 text-xs font-semibold text-sumi-500 whitespace-nowrap">加入日期</th>
+                <th class="px-4 py-2.5"></th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-tbody">
+              <tr><td colspan="6" class="px-4 py-8 text-center text-sm text-sumi-400">載入中…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Panel: Danger Zone -->
+      <div id="admin-panel-danger" class="hidden p-6 space-y-6">
+        <div class="border border-red-200 bg-red-50 rounded-lg p-5 space-y-3">
+          <p class="font-semibold text-red-700 text-sm">原廠重置系統</p>
+          <p class="text-xs text-red-600 leading-relaxed">
+            此操作會「永久刪除」所有相簿、照片、辨識結果與使用者帳號（含您目前的管理員帳號），
+            並將網站設定還原為預設值，整個系統會回到全新安裝狀態。<br />
+            <strong>此操作無法復原，請務必確認已有必要的備份。</strong>
+          </p>
+          <button onclick="openFactoryResetModal()" class="btn-danger-sm">原廠重置系統…</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══ FACTORY RESET MODAL ═══════════════════════════════════════════════ -->
+<div id="factory-reset-modal" class="modal-overlay" style="z-index:9100" onclick="if(event.target===this)closeFactoryResetModal()">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+    <div class="px-6 py-4 border-b border-sumi-100 flex items-center justify-between">
+      <h3 class="font-serif font-semibold text-red-700">原廠重置系統</h3>
+      <button onclick="closeFactoryResetModal()" class="text-sumi-400 hover:text-sumi-700 text-2xl leading-none">×</button>
+    </div>
+    <div class="p-6 space-y-4">
+      <p class="text-xs text-sumi-500 leading-relaxed">
+        此操作將清空所有相簿、照片、帳號與設定，且<strong class="text-red-600">無法復原</strong>。
+        請輸入下方確認文字並輸入您目前的密碼以繼續。
+      </p>
+      <div>
+        <label class="block text-xs font-semibold text-sumi-500 mb-1">
+          請輸入「<span class="text-red-600">確認重置</span>」以繼續
+        </label>
+        <input id="factory-reset-phrase" type="text" class="jp-input" autocomplete="off" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-sumi-500 mb-1">目前密碼</label>
+        <input id="factory-reset-password" type="password" class="jp-input" autocomplete="current-password" />
+      </div>
+      <p id="factory-reset-error" class="hidden text-xs text-red-500 bg-red-50 rounded-md px-3 py-2"></p>
+    </div>
+    <div class="px-6 py-4 border-t border-sumi-100 flex justify-end gap-3">
+      <button onclick="closeFactoryResetModal()" class="btn-ghost">取消</button>
+      <button id="btn-confirm-factory-reset" onclick="confirmFactoryReset()" class="btn-danger-sm">永久刪除並重置</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ USER EDIT MODAL ═══════════════════════════════════════════════════ -->
+<div id="user-edit-modal" class="modal-overlay" style="z-index:9000" onclick="if(event.target===this)closeUserEditModal()">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
+    <div class="px-6 py-4 border-b border-sumi-100 flex items-center justify-between">
+      <h3 class="font-serif font-semibold text-sumi-800">編輯用戶資料</h3>
+      <button onclick="closeUserEditModal()" class="text-sumi-400 hover:text-sumi-700 text-2xl leading-none">×</button>
+    </div>
+    <div class="p-6 space-y-4">
+      <input type="hidden" id="edit-user-id" />
+      <div>
+        <label class="block text-xs font-semibold text-sumi-500 mb-1">顯示名稱</label>
+        <input id="edit-user-display-name" type="text" class="jp-input" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-sumi-500 mb-1">Email</label>
+        <input id="edit-user-email" type="email" class="jp-input" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-sumi-500 mb-1">角色</label>
+        <select id="edit-user-role" class="jp-input bg-white">
+          <option value="user">用戶</option>
+          <option value="admin">管理員</option>
+        </select>
+      </div>
+      <div class="border-t border-sumi-100 pt-4">
+        <label class="block text-xs font-semibold text-sumi-500 mb-1">重設密碼</label>
+        <input id="edit-user-password" type="password" class="jp-input" placeholder="留空則不更改密碼" />
+      </div>
+      <p id="edit-user-error" class="hidden text-xs text-red-500 bg-red-50 rounded-md px-3 py-2"></p>
+      <div class="flex gap-3 pt-1">
+        <button onclick="closeUserEditModal()" class="btn-ghost flex-1 py-2.5">取消</button>
+        <button onclick="saveUserEdit()" class="btn-primary flex-1 py-2.5">儲存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MAIN ═══════════════════════════════════════════════════════════════ -->
+<main class="max-w-6xl mx-auto px-6 py-10">
+
+  <!-- Tabs bar -->
+  <div id="tabs-bar" class="hidden mb-7 flex items-center gap-2.5">
+    <button data-tab="all"
+      class="tab-btn active px-4 py-1.5 rounded-full text-sm font-medium tracking-wide transition-all">全部照片</button>
+    <button data-tab="unrecognized"
+      class="tab-btn px-4 py-1.5 rounded-full text-sm font-medium tracking-wide transition-all">
+      未辨識 <span id="unrec-count" class="text-xs"></span>
+    </button>
+    <span id="photo-total" class="ml-auto text-sm text-sumi-400 tracking-wide"></span>
+  </div>
+
+  <!-- OCR progress banner -->
+  <div id="ocr-banner" class="hidden mb-7 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+    <div class="flex items-center gap-3">
+      <span class="text-amber-500 spin select-none text-base">◐</span>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-semibold text-amber-700">號碼辨識中，完成後自動更新</p>
+        <div class="flex items-center gap-2 mt-1.5">
+          <div class="flex-1 bg-amber-200 rounded-full h-1 overflow-hidden">
+            <div id="ocr-bar" class="bg-amber-500 h-1 rounded-full transition-all duration-500" style="width:0%"></div>
+          </div>
+          <span id="ocr-progress-text" class="text-xs text-amber-600 whitespace-nowrap font-medium">0/0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search result header -->
+  <div id="search-header" class="hidden mb-7 flex items-center gap-3">
+    <button id="btn-back-search" class="text-sakura-600 hover:text-sakura-800 text-sm font-medium tracking-wide transition-colors">← 返回</button>
+    <span class="text-sumi-700 font-medium tracking-wide">
+      號碼 <span id="search-bib-label" class="text-sakura-600 text-xl font-semibold"></span> 的照片
+    </span>
+    <span id="search-count" class="text-sm text-sumi-400"></span>
+  </div>
+
+  <!-- UPLOAD VIEW -->
+  <div id="upload-view" class="hidden">
+    <div class="max-w-2xl mx-auto space-y-5">
+      <h2 class="font-serif font-semibold text-xl text-sumi-800 tracking-[.04em] mb-2">上傳照片</h2>
+
+      <!-- Album Selection -->
+      <div class="upload-card">
+        <p class="section-label mb-3.5">選擇相簿 <span class="text-sakura-500 normal-case font-normal tracking-normal">（必填）</span></p>
+        <div class="flex gap-2">
+          <select id="upload-album-select" class="jp-input bg-white flex-1">
+            <option value="">請先選擇相簿</option>
+          </select>
+          <button id="btn-show-new-album" class="btn-ghost whitespace-nowrap px-3">+ 新相簿</button>
+        </div>
+        <div id="new-album-form" class="hidden mt-4 pt-4 border-t border-sumi-100 space-y-2.5">
+          <p class="text-xs font-semibold text-sumi-500">建立新相簿</p>
+          <input id="new-album-name" type="text" placeholder="相簿名稱（必填）" class="jp-input" />
+          <input id="new-album-date" type="date" class="jp-input" />
+          <input id="new-album-desc" type="text" placeholder="備註（選填）" class="jp-input" />
+          <div class="flex gap-2">
+            <button id="btn-create-album" class="btn-sakura text-sm">建立相簿</button>
+            <button id="btn-cancel-new-album" class="btn-ghost text-sm">取消</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- File Upload -->
+      <div class="upload-card">
+        <p class="section-label mb-3">選擇照片</p>
+        <div class="space-y-2.5">
+          <div id="drop-zone"
+            class="border-2 border-dashed border-sumi-200 rounded-lg p-8 text-center
+                   cursor-pointer hover:border-sakura-300 transition-colors"
+            onclick="document.getElementById('file-input').click()">
+            <p class="text-sumi-500 text-sm">拖曳照片到這裡，或點此選擇</p>
+            <p class="text-xs text-sumi-400 mt-1">JPG、PNG、WebP，可多選</p>
+            <input id="file-input" type="file" multiple accept="image/*" class="hidden" />
+          </div>
+          <div id="file-list" class="space-y-1 text-xs text-sumi-400 max-h-28 overflow-y-auto"></div>
+          <div id="upload-progress-wrap" class="hidden space-y-1">
+            <div class="flex justify-between text-xs">
+              <span class="text-sumi-500">上傳中</span>
+              <span id="upload-pct" class="font-bold text-sakura-600">0%</span>
+            </div>
+            <div class="w-full bg-sumi-100 rounded-full h-1.5 overflow-hidden">
+              <div id="upload-bar" class="bg-sakura-500 h-1.5 rounded-full transition-all duration-150" style="width:0%"></div>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <button id="btn-upload" disabled class="btn-sakura">上傳照片</button>
+            <span id="upload-status" class="text-xs text-sumi-400"></span>
+          </div>
+          <div id="upload-results" class="hidden space-y-1 mt-1"></div>
+          <div id="upload-album-link" class="hidden mt-1">
+            <button id="btn-go-to-album"
+              class="text-sakura-600 hover:text-sakura-800 text-sm font-semibold transition-colors">
+              → 前往查看相簿
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reprocess -->
+      <div class="upload-card">
+        <p class="section-label mb-2">重新辨識</p>
+        <p class="text-xs text-sumi-400 mb-3">對已選相簿中尚未辨識的照片重新執行號碼辨識</p>
+        <div class="flex items-center gap-3 flex-wrap">
+          <button id="btn-reprocess"
+            class="bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium
+                   px-4 py-2 rounded-md transition-all active:scale-95">
+            重新辨識
+          </button>
+          <span id="reprocess-status" class="text-xs text-sumi-400"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Photo grid -->
+  <div id="photo-grid" class="masonry"></div>
+
+  <!-- Skeleton -->
+  <div id="state-skeleton" class="hidden masonry-skeleton">
+    <div class="masonry-item skeleton h-52"></div>
+    <div class="masonry-item skeleton h-40"></div>
+    <div class="masonry-item skeleton h-64"></div>
+    <div class="masonry-item skeleton h-48"></div>
+    <div class="masonry-item skeleton h-56"></div>
+    <div class="masonry-item skeleton h-44"></div>
+  </div>
+
+  <!-- Empty state -->
+  <div id="state-empty" class="hidden text-center py-24">
+    <div class="w-11 h-11 rounded-full border border-sumi-200 flex items-center justify-center mx-auto mb-5">
+      <span class="text-sumi-400 text-lg select-none">·</span>
+    </div>
+    <p id="empty-msg" class="text-base font-medium text-sumi-500 tracking-wide">尚無照片</p>
+    <p class="text-sm mt-1.5 text-sumi-400" id="empty-sub"></p>
+  </div>
+
+  <!-- Load more -->
+  <div id="load-more-wrap" class="hidden text-center mt-10">
+    <button id="btn-load-more"
+      class="bg-white hover:bg-sumi-50 text-sumi-600 font-medium px-9 py-2.5
+             rounded-full border border-sumi-200 transition-all text-sm tracking-wide">
+      載入更多
+    </button>
+  </div>
+
+  <!-- Album grid -->
+  <div id="album-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5"></div>
+
+</main>
+
+<!-- ═══ LIGHTBOX ═════════════════════════════════════════════════════════════ -->
+<div id="lightbox" onclick="if(event.target===this)closeLightbox()">
+  <button onclick="lbPrev()" id="lb-prev"
+    class="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white
+           text-4xl select-none px-2 z-10 transition-colors">‹</button>
+  <div class="flex flex-col items-center gap-3 max-w-[90vw]">
+    <img id="lightbox-img" src="" alt="" />
+    <div class="flex items-center gap-3 flex-wrap justify-center">
+      <span id="lb-filename" class="text-sumi-400 text-sm truncate max-w-xs"></span>
+      <span id="lb-bibs" class="text-sakura-300 text-sm font-semibold"></span>
+      <button id="lb-download" onclick="lbDownload()"
+        class="bg-white/15 hover:bg-white/25 text-white text-sm font-medium
+               px-4 py-1.5 rounded-full transition-all">
+        下載
+      </button>
+      <button id="lb-delete" onclick="lbDeletePhoto()"
+        class="hidden bg-red-500/70 hover:bg-red-500 text-white text-sm font-medium
+               px-4 py-1.5 rounded-full transition-all">
+        刪除
+      </button>
+    </div>
+    <span id="lb-counter" class="text-sumi-500 text-xs"></span>
+  </div>
+  <button onclick="lbNext()" id="lb-next"
+    class="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white
+           text-4xl select-none px-2 z-10 transition-colors">›</button>
+  <button onclick="closeLightbox()"
+    class="absolute top-4 right-5 text-white/60 hover:text-white text-3xl leading-none transition-colors">×</button>
+</div>
+
+<!-- ═══ TOAST ════════════════════════════════════════════════════════════════ -->
+<div id="toast"
+  class="fixed bottom-5 left-1/2 -translate-x-1/2 bg-sumi-800 text-white px-5 py-2.5
+         rounded-full shadow-xl text-sm hidden z-50"></div>
+
+<!-- ═══ FOOTER ═══════════════════════════════════════════════════════════════ -->
+<footer class="max-w-6xl mx-auto px-6 py-10 mt-12 border-t border-sumi-200">
+  <p class="text-center text-xs text-sumi-400 tracking-[.08em]" id="footer-title">路跑相簿 — 號碼牌辨識系統</p>
+</footer>
+
+<!-- ═══ JAVASCRIPT ════════════════════════════════════════════════════════════ -->
+<script>
+// ── Auth State ─────────────────────────────────────────────────────────────────
+// JWT is stored exclusively in an HttpOnly Secure SameSite=Strict cookie set by
+// the server — it is intentionally NOT accessible from JavaScript.
+// localStorage only holds non-sensitive display info (name, role) so the UI can
+// render without waiting for a server round-trip on every page load.
+const Auth = {
+  user: (() => { try { return JSON.parse(localStorage.getItem('rb_user') || 'null') } catch { return null } })(),
+
+  isLoggedIn() { return !!this.user },
+  isAdmin() { return this.user?.role === 'admin' },
+  canManageAlbum(album) {
+    if (!this.isLoggedIn()) return false
+    return this.isAdmin() || this.user.id === album.owner_id
+  },
+  canManagePhoto(albumOwnerId) {
+    if (!this.isLoggedIn()) return false
+    return this.isAdmin() || this.user.id === albumOwnerId
+  },
+
+  // token parameter removed — JWT now lives only in the HttpOnly cookie
+  save(user) {
+    this.user = user
+    localStorage.setItem('rb_user', JSON.stringify(user))
+  },
+  clear() {
+    this.user = null
+    localStorage.removeItem('rb_user')
+  }
+}
+
+// ── App State ──────────────────────────────────────────────────────────────────
+const S = {
+  view: 'home',
+  album: null,
+  tab: 'all',
+  bib: '',
+  photos: [],
+  page: 1,
+  hasMore: false,
+  total: 0,
+  lbIdx: -1,
+  albums: [],
+}
+
+// ── Site Settings ──────────────────────────────────────────────────────────────
+let siteSettings = { site_title: '路跑相簿', logo_url: null }
+
+async function loadSiteSettings() {
+  try {
+    siteSettings = await _get('/api/settings')
+  } catch {}
+  applySiteSettings()
+}
+
+function applySiteSettings() {
+  const title = siteSettings.site_title || '路跑相簿'
+  document.title = title + ' | 號碼牌搜尋'
+  $('site-title').textContent = title
+  $('auth-site-title').textContent = title
+  $('footer-title').textContent = title + ' — 號碼牌辨識系統'
+
+  const logo = $('site-logo')
+  const titleEl = $('site-title')
+  if (siteSettings.logo_url) {
+    logo.src = siteSettings.logo_url + '?t=' + Date.now()
+    logo.classList.remove('hidden')
+    titleEl.classList.add('hidden')
+  } else {
+    logo.classList.add('hidden')
+    titleEl.classList.remove('hidden')
+  }
+}
+
+// ── API ────────────────────────────────────────────────────────────────────────
+const api = {
+  async albums()                     { return _get('/api/albums') },
+  async stream(albumId, page, unrec) {
+    const p = new URLSearchParams({ page, limit: 24 })
+    if (albumId != null) p.set('album_id', albumId)
+    if (unrec) p.set('unrecognized', 'true')
+    return _get('/api/photostream?' + p)
+  },
+  async search(bib, albumId) {
+    const p = new URLSearchParams({ bib })
+    if (albumId != null) p.set('album_id', albumId)
+    return _get('/api/search?' + p)
+  },
+  async createAlbum(name, date, desc) {
+    const fd = new FormData()
+    fd.append('name', name)
+    if (date) fd.append('event_date', date)
+    if (desc) fd.append('description', desc)
+    return _authPost('/api/albums', fd)
+  },
+  async upload(files, albumId) {
+    const fd = new FormData()
+    files.forEach(f => fd.append('files', f))
+    if (albumId) fd.append('album_id', albumId)
+    return _authPost('/api/upload', fd)
+  },
+  async reprocess(albumId, unrec = true) {
+    const fd = new FormData()
+    if (albumId != null) fd.append('album_id', albumId)
+    fd.append('unrecognized_only', unrec ? 'true' : 'false')
+    return _authPost('/api/reprocess', fd)
+  },
+  async deleteAlbum(id)  { return _authDelete(`/api/albums/${id}`) },
+  async deletePhoto(id)  { return _authDelete(`/api/photos/${id}`) },
+  async login(identifier, password)  { return _jsonPost('/api/auth/login', {identifier, password}) },
+  async register(display_name, username, email, password) { return _jsonPost('/api/auth/register', {display_name, username, email, password}) },
+  async me()  { return _authGet('/api/auth/me') },
+  async updateProfile(data) { return _authPut('/api/auth/me', data) },
+  async factoryReset(password, confirmPhrase) {
+    return _authPostJson('/api/admin/factory-reset', { password, confirm_phrase: confirmPhrase })
+  },
+}
+
+// credentials: 'include' tells the browser to send the HttpOnly session cookie
+// on every request to this origin. No Authorization header needed or used.
+async function _get(url) {
+  const r = await fetch(url, { credentials: 'include' })
+  const d = await r.json()
+  if (!r.ok) throw new Error(d.detail || 'Request failed')
+  return d
+}
+async function _authGet(url) {
+  const r = await fetch(url, { credentials: 'include' })
+  const d = await r.json()
+  if (!r.ok) throw new Error(d.detail || 'Request failed')
+  return d
+}
+async function _authPost(url, body) {
+  const r = await fetch(url, { method: 'POST', credentials: 'include', body })
+  const d = await r.json()
+  if (!r.ok) throw new Error(d.detail || 'Request failed')
+  return d
+}
+async function _authPostJson(url, data) {
+  const r = await fetch(url, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  })
+  const d = await r.json()
+  if (!r.ok) throw new Error(d.detail || 'Request failed')
+  return d
+}
+async function _jsonPost(url, data) {
+  const r = await fetch(url, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  })
+  const d = await r.json()
+  if (!r.ok) throw new Error(d.detail || 'Request failed')
+  return d
+}
+async function _authDelete(url) {
+  const r = await fetch(url, { method: 'DELETE', credentials: 'include' })
+  const d = await r.json()
+  if (!r.ok) throw new Error(d.detail || 'Request failed')
+  return d
+}
+async function _authPut(url, data) {
+  const r = await fetch(url, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  })
+  const d = await r.json()
+  if (!r.ok) throw new Error(d.detail || 'Request failed')
+  return d
+}
+
+// ── Auth UI ────────────────────────────────────────────────────────────────────
+function updateAuthUI() {
+  if (Auth.isLoggedIn()) {
+    $('auth-guest').classList.add('hidden')
+    $('auth-user').classList.remove('hidden')
+    $('btn-nav-upload').classList.remove('hidden')
+    const initial = (Auth.user.display_name || Auth.user.username)[0].toUpperCase()
+    $('user-avatar').textContent = initial
+    $('user-name-display').textContent = Auth.user.display_name || Auth.user.username
+    $('dropdown-username').textContent = Auth.user.display_name || Auth.user.username
+    if (Auth.isAdmin()) {
+      $('admin-badge').classList.remove('hidden')
+      $('btn-admin-panel').classList.remove('hidden')
+    } else {
+      $('admin-badge').classList.add('hidden')
+      $('btn-admin-panel').classList.add('hidden')
+    }
+  } else {
+    $('auth-guest').classList.remove('hidden')
+    $('auth-user').classList.add('hidden')
+    $('btn-nav-upload').classList.add('hidden')
+  }
+}
+
+function toggleUserMenu() {
+  $('user-dropdown').classList.toggle('open')
+}
+
+document.addEventListener('click', e => {
+  if (!$('auth-user').contains(e.target)) {
+    $('user-dropdown').classList.remove('open')
+  }
+})
+
+function logout() {
+  Auth.clear()
+  updateAuthUI()
+  toast('已登出')
+  $('user-dropdown').classList.remove('open')
+  navHome()
+}
+
+// ── Auth Modal ─────────────────────────────────────────────────────────────────
+function openAuthModal(tab = 'login') {
+  switchAuthTab(tab)
+  $('auth-modal').classList.add('open')
+  setTimeout(() => {
+    $(tab === 'login' ? 'login-identifier' : 'reg-display-name').focus()
+  }, 100)
+}
+function closeAuthModal() {
+  $('auth-modal').classList.remove('open')
+  $('login-error').classList.add('hidden')
+  $('reg-error').classList.add('hidden')
+}
+
+function switchAuthTab(tab) {
+  const isLogin = tab === 'login'
+  $('form-login').classList.toggle('hidden', !isLogin)
+  $('form-register').classList.toggle('hidden', isLogin)
+  document.querySelectorAll('[data-tab]').forEach(b => {
+    if (b.closest('#auth-modal')) {
+      const active = b.dataset.tab === tab
+      b.classList.toggle('active', active)
+      b.style.borderBottomColor = active ? '#C4718A' : 'transparent'
+    }
+  })
+}
+
+async function submitLogin() {
+  const identifier = $('login-identifier').value.trim()
+  const password = $('login-password').value
+  if (!identifier || !password) { showAuthError('login', '請填寫所有欄位'); return }
+  try {
+    const data = await api.login(identifier, password)
+    Auth.save(data.user)
+    updateAuthUI()
+    closeAuthModal()
+    refreshAlbumSelect()
+    toast(`歡迎回來，${data.user.display_name}`)
+    if (S.view === 'home') navHome()
+  } catch(e) { showAuthError('login', e.message) }
+}
+
+async function submitRegister() {
+  const display_name = $('reg-display-name').value.trim()
+  const username = $('reg-username').value.trim()
+  const email = $('reg-email').value.trim()
+  const password = $('reg-password').value
+  if (!display_name || !username || !email || !password) { showAuthError('reg', '請填寫所有欄位'); return }
+  try {
+    const data = await api.register(display_name, username, email, password)
+    Auth.save(data.token, data.user)
+    updateAuthUI()
+    closeAuthModal()
+    refreshAlbumSelect()
+    toast(`帳號建立成功，歡迎 ${data.user.display_name}${data.user.role === 'admin' ? '（管理員）' : ''}`)
+    if (S.view === 'home') navHome()
+  } catch(e) { showAuthError('reg', e.message) }
+}
+
+function showAuthError(form, msg) {
+  const el = form === 'login' ? $('login-error') : $('reg-error')
+  el.textContent = msg; el.classList.remove('hidden')
+}
+
+// ── Settings Modal ─────────────────────────────────────────────────────────────
+function openSettingsModal() {
+  $('user-dropdown').classList.remove('open')
+  $('settings-display-name').value = Auth.user?.display_name || ''
+  $('settings-email').value = Auth.user?.email || ''
+  $('settings-current-password').value = ''
+  $('settings-new-password').value = ''
+  $('settings-confirm-password').value = ''
+  $('settings-error').classList.add('hidden')
+  $('settings-success').classList.add('hidden')
+  $('settings-modal').classList.add('open')
+  setTimeout(() => $('settings-display-name').focus(), 100)
+}
+
+function closeSettingsModal() {
+  $('settings-modal').classList.remove('open')
+}
+
+async function saveSettings() {
+  const display_name = $('settings-display-name').value.trim()
+  const email = $('settings-email').value.trim()
+  const current_password = $('settings-current-password').value
+  const new_password = $('settings-new-password').value
+  const confirm_password = $('settings-confirm-password').value
+
+  if (!display_name) { showSettingsMsg('error', '顯示名稱不得為空'); return }
+  if (!email) { showSettingsMsg('error', 'Email 不得為空'); return }
+
+  if (new_password || current_password) {
+    if (!current_password) { showSettingsMsg('error', '請輸入目前密碼才能變更密碼'); return }
+    if (new_password.length < 6) { showSettingsMsg('error', '新密碼至少需要 6 個字元'); return }
+    if (new_password !== confirm_password) { showSettingsMsg('error', '新密碼與確認密碼不符'); return }
+  }
+
+  const data = { display_name, email }
+  if (new_password && current_password) {
+    data.current_password = current_password
+    data.new_password = new_password
+  }
+
+  try {
+    const user = await api.updateProfile(data)
+    Auth.save(Auth.token, user)
+    updateAuthUI()
+    showSettingsMsg('success', '設定已儲存')
+    setTimeout(closeSettingsModal, 1500)
+  } catch(e) { showSettingsMsg('error', e.message) }
+}
+
+function showSettingsMsg(type, msg) {
+  const errEl = $('settings-error')
+  const okEl = $('settings-success')
+  if (type === 'error') {
+    errEl.textContent = msg; errEl.classList.remove('hidden')
+    okEl.classList.add('hidden')
+  } else {
+    okEl.textContent = msg; okEl.classList.remove('hidden')
+    errEl.classList.add('hidden')
+  }
+}
+
+// ── Delete Modal ───────────────────────────────────────────────────────────────
+let _deleteCallback = null
+
+function openDeleteModal(title, msg, onConfirm) {
+  $('delete-title').textContent = title
+  $('delete-msg').textContent = msg
+  _deleteCallback = onConfirm
+  $('delete-modal').classList.add('open')
+}
+
+function closeDeleteModal() {
+  $('delete-modal').classList.remove('open')
+  _deleteCallback = null
+}
+
+$('btn-confirm-delete').addEventListener('click', async () => {
+  if (_deleteCallback) {
+    $('btn-confirm-delete').disabled = true
+    $('btn-confirm-delete').textContent = '刪除中…'
+    try { await _deleteCallback() }
+    finally {
+      $('btn-confirm-delete').disabled = false
+      $('btn-confirm-delete').textContent = '確認刪除'
+      closeDeleteModal()
+    }
+  }
+})
+
+// ── Admin Modal ─────────────────────────────────────────────────────────────────
+function openAdminModal() {
+  if (!Auth.isAdmin()) {
+    toast('僅管理員可進入管理控制台')
+    return
+  }
+  $('user-dropdown').classList.remove('open')
+  switchAdminTab('settings')
+  $('admin-modal').classList.add('open')
+  loadAdminSettings()
+  loadAdminUsers()
+}
+
+function closeAdminModal() {
+  $('admin-modal').classList.remove('open')
+}
+
+function switchAdminTab(tab) {
+  $('admin-tab-settings').classList.toggle('active', tab === 'settings')
+  $('admin-tab-users').classList.toggle('active', tab === 'users')
+  $('admin-tab-danger').classList.toggle('active', tab === 'danger')
+  $('admin-panel-settings').classList.toggle('hidden', tab !== 'settings')
+  $('admin-panel-users').classList.toggle('hidden', tab !== 'users')
+  $('admin-panel-danger').classList.toggle('hidden', tab !== 'danger')
+}
+
+// ── Factory Reset ───────────────────────────────────────────────────────────────
+
+function openFactoryResetModal() {
+  if (!Auth.isAdmin()) { toast('僅管理員可執行此操作'); return }
+  $('factory-reset-phrase').value = ''
+  $('factory-reset-password').value = ''
+  $('factory-reset-error').classList.add('hidden')
+  $('btn-confirm-factory-reset').disabled = false
+  $('factory-reset-modal').classList.add('open')
+}
+
+function closeFactoryResetModal() {
+  $('factory-reset-modal').classList.remove('open')
+}
+
+async function confirmFactoryReset() {
+  const phrase = $('factory-reset-phrase').value.trim()
+  const password = $('factory-reset-password').value
+  const errEl = $('factory-reset-error')
+  errEl.classList.add('hidden')
+
+  if (phrase !== '確認重置') {
+    errEl.textContent = '請輸入正確的確認文字「確認重置」'
+    errEl.classList.remove('hidden')
+    return
+  }
+  if (!password) {
+    errEl.textContent = '請輸入目前密碼'
+    errEl.classList.remove('hidden')
+    return
+  }
+
+  $('btn-confirm-factory-reset').disabled = true
+  try {
+    await api.factoryReset(password, phrase)
+    closeFactoryResetModal()
+    closeAdminModal()
+    toast('系統已重置，請重新註冊帳號')
+    Auth.clear()
+    setTimeout(() => location.reload(), 1200)
+  } catch (e) {
+    errEl.textContent = e.message
+    errEl.classList.remove('hidden')
+    $('btn-confirm-factory-reset').disabled = false
+  }
+}
+
+function loadAdminSettings() {
+  $('admin-site-title').value = siteSettings.site_title || ''
+  const preview = $('logo-preview')
+  const placeholder = $('logo-placeholder')
+  const removeBtn = $('btn-remove-logo')
+  if (siteSettings.logo_url) {
+    preview.src = siteSettings.logo_url + '?t=' + Date.now()
+    preview.classList.remove('hidden')
+    placeholder.classList.add('hidden')
+    removeBtn.classList.remove('hidden')
+  } else {
+    preview.classList.add('hidden')
+    placeholder.classList.remove('hidden')
+    removeBtn.classList.add('hidden')
+  }
+  const msgEl = $('admin-settings-msg')
+  msgEl.classList.add('hidden')
+}
+
+async function saveAdminSettings() {
+  const title = $('admin-site-title').value.trim()
+  if (!title) { toast('網站標題不得為空'); return }
+  try {
+    siteSettings = await _authPut('/api/settings', { site_title: title })
+    applySiteSettings()
+    const msgEl = $('admin-settings-msg')
+    msgEl.textContent = '網站設定已儲存'
+    msgEl.classList.remove('hidden')
+    setTimeout(() => msgEl.classList.add('hidden'), 3000)
+  } catch(e) { toast(e.message) }
+}
+
+async function uploadLogo() {
+  const file = $('logo-input').files[0]
+  if (!file) return
+  const fd = new FormData()
+  fd.append('file', file)
+  try {
+    siteSettings = await _authPost('/api/settings/logo', fd)
+    applySiteSettings()
+    loadAdminSettings()
+    toast('Logo 已更新')
+  } catch(e) { toast(e.message) }
+  $('logo-input').value = ''
+}
+
+async function removeLogo() {
+  try {
+    siteSettings = await _authDelete('/api/settings/logo')
+    applySiteSettings()
+    loadAdminSettings()
+    toast('Logo 已移除')
+  } catch(e) { toast(e.message) }
+}
+
+// ── Admin User Management ──────────────────────────────────────────────────────
+let adminUsers = []
+
+async function loadAdminUsers() {
+  if (!Auth.isAdmin()) return
+  try {
+    adminUsers = await _authGet('/api/admin/users')
+    $('admin-user-count').textContent = `共 ${adminUsers.length} 位用戶`
+    renderAdminUsers('')
+  } catch(e) {
+    $('admin-users-tbody').innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-sm text-red-500">${e.message}</td></tr>`
+  }
+}
+
+function renderAdminUsers(query) {
+  const q = query.trim().toLowerCase()
+  const filtered = q
+    ? adminUsers.filter(u =>
+        u.username.toLowerCase().includes(q) ||
+        u.display_name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q))
+    : adminUsers
+
+  const tbody = $('admin-users-tbody')
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-sm text-sumi-400">找不到符合的用戶</td></tr>`
+    return
+  }
+
+  tbody.innerHTML = filtered.map(u => `
+    <tr class="hover:bg-sumi-50 transition-colors">
+      <td class="px-4 py-3 text-sm text-sumi-700 font-medium whitespace-nowrap">${esc(u.username)}</td>
+      <td class="px-4 py-3 text-sm text-sumi-600 whitespace-nowrap">${esc(u.display_name)}</td>
+      <td class="px-4 py-3 text-sm text-sumi-500">${esc(u.email)}</td>
+      <td class="px-4 py-3 whitespace-nowrap">
+        <span class="pill ${u.role === 'admin' ? 'bg-sakura-100 text-sakura-700' : 'bg-sumi-100 text-sumi-600'}">
+          ${u.role === 'admin' ? '管理員' : '用戶'}
+        </span>
+      </td>
+      <td class="px-4 py-3 text-xs text-sumi-400 whitespace-nowrap">${u.created_at ? u.created_at.slice(0, 10) : '—'}</td>
+      <td class="px-4 py-3">
+        <div class="flex gap-3 items-center">
+          <button onclick="openUserEditModal(${u.id})"
+            class="text-xs text-sakura-600 hover:text-sakura-800 font-medium transition-colors">編輯</button>
+          ${u.id !== Auth.user?.id
+            ? `<button onclick="confirmDeleteAdminUser(${u.id}, '${esc(u.username)}')"
+                class="text-xs text-red-400 hover:text-red-600 font-medium transition-colors">刪除</button>`
+            : `<span class="text-xs text-sumi-300">（自己）</span>`}
+        </div>
+      </td>
+    </tr>
+  `).join('')
+}
+
+function openUserEditModal(userId) {
+  const user = adminUsers.find(u => u.id === userId)
+  if (!user) return
+  $('edit-user-id').value = userId
+  $('edit-user-display-name').value = user.display_name
+  $('edit-user-email').value = user.email
+  $('edit-user-role').value = user.role
+  $('edit-user-password').value = ''
+  $('edit-user-error').classList.add('hidden')
+  $('user-edit-modal').classList.add('open')
+  setTimeout(() => $('edit-user-display-name').focus(), 100)
+}
+
+function closeUserEditModal() {
+  $('user-edit-modal').classList.remove('open')
+}
+
+async function saveUserEdit() {
+  const userId = parseInt($('edit-user-id').value)
+  const display_name = $('edit-user-display-name').value.trim()
+  const email = $('edit-user-email').value.trim()
+  const role = $('edit-user-role').value
+  const pwd = $('edit-user-password').value
+
+  if (!display_name) {
+    $('edit-user-error').textContent = '顯示名稱不得為空'
+    $('edit-user-error').classList.remove('hidden'); return
+  }
+
+  const data = { display_name, email, role }
+  if (pwd) {
+    if (pwd.length < 6) {
+      $('edit-user-error').textContent = '新密碼至少需要 6 個字元'
+      $('edit-user-error').classList.remove('hidden'); return
+    }
+    data.new_password = pwd
+  }
+
+  try {
+    const updated = await _authPut(`/api/admin/users/${userId}`, data)
+    const idx = adminUsers.findIndex(u => u.id === userId)
+    if (idx !== -1) adminUsers[idx] = updated
+    renderAdminUsers($('admin-user-search').value)
+    closeUserEditModal()
+    toast('用戶資料已更新')
+  } catch(e) {
+    $('edit-user-error').textContent = e.message
+    $('edit-user-error').classList.remove('hidden')
+  }
+}
+
+function confirmDeleteAdminUser(userId, username) {
+  openDeleteModal(
+    '刪除用戶',
+    `確定要刪除用戶「${username}」嗎？此操作無法復原。`,
+    async () => {
+      await _authDelete(`/api/admin/users/${userId}`)
+      adminUsers = adminUsers.filter(u => u.id !== userId)
+      $('admin-user-count').textContent = `共 ${adminUsers.length} 位用戶`
+      renderAdminUsers($('admin-user-search').value)
+      toast(`用戶「${username}」已刪除`)
+    }
+  )
+}
+
+// ── Navigation ─────────────────────────────────────────────────────────────────
+async function navHome() {
+  S.view = 'home'; S.album = null; S.bib = ''
+  $('bib-input').value = ''
+  $('bib-input').placeholder = '搜尋相簿名稱…'
+  stopOcrPolling()
+  showEl('ocr-banner', false)
+  setHeader(false); showTabsBar(false); showEl('search-header', false)
+  setGridVisible(false); showEl('load-more-wrap', false); clearGrid()
+  showEl('upload-view', false)
+
+  const grid = $('album-grid')
+  grid.innerHTML = ''; grid.classList.remove('hidden')
+
+  try {
+    S.albums = await api.albums()
+    renderAlbumGrid('')
+  } catch(e) { toast(e.message) }
+}
+
+function navUpload() {
+  if (!Auth.isLoggedIn()) { openAuthModal('login'); return }
+  S.view = 'upload'; S.album = null; S.bib = ''
+  $('bib-input').value = ''
+  $('bib-input').placeholder = '搜尋相簿名稱…'
+  stopOcrPolling()
+  showEl('ocr-banner', false)
+  setHeader(false); showTabsBar(false); showEl('search-header', false)
+  setGridVisible(false); showEl('load-more-wrap', false); clearGrid()
+  $('album-grid').classList.add('hidden')
+
+  _newAlbumFormVisible = false
+  showEl('new-album-form', false)
+  $('upload-results').classList.add('hidden')
+  $('upload-album-link').classList.add('hidden')
+  $('upload-status').textContent = ''
+  $('reprocess-status').textContent = ''
+
+  showEl('upload-view', true)
+  refreshAlbumSelect()
+}
+
+function renderAlbumGrid(query) {
+  const grid = $('album-grid')
+  grid.innerHTML = ''
+  const q = query.trim().toLowerCase()
+  const filtered = q
+    ? S.albums.filter(a =>
+        a.name.toLowerCase().includes(q) ||
+        (a.description || '').toLowerCase().includes(q))
+    : S.albums
+
+  if (!S.albums.length) {
+    grid.innerHTML = `
+      <div class="col-span-full text-center py-20">
+        <div class="w-12 h-12 rounded-full bg-sumi-100 flex items-center justify-center mx-auto mb-4">
+          <span class="text-sumi-400 text-lg select-none">·</span>
+        </div>
+        <p class="text-base font-semibold text-sumi-500">尚無相簿</p>
+        <p class="text-sm mt-1 text-sumi-400">${Auth.isLoggedIn() ? '請點擊上方「上傳」建立第一個相簿' : '請登入後建立相簿'}</p>
+      </div>`
+    return
+  }
+  if (!filtered.length) {
+    grid.innerHTML = `
+      <div class="col-span-full text-center py-16">
+        <p class="text-sumi-400 font-medium">找不到符合「${esc(query)}」的相簿</p>
+      </div>`
+    return
+  }
+  filtered.forEach(a => grid.appendChild(makeAlbumCard(a)))
+}
+
+async function navAlbum(album, tab = 'all') {
+  S.view = 'album'; S.album = album; S.tab = tab
+  S.page = 1; S.photos = []; S.hasMore = false
+
+  $('bib-input').value = ''
+  $('bib-input').placeholder = `在「${album.name}」搜尋號碼…`
+  stopOcrPolling()
+  showEl('ocr-banner', false)
+  showEl('upload-view', false)
+
+  $('album-grid').classList.add('hidden')
+  setHeader(true, album.name); showTabsBar(true); showEl('search-header', false)
+  setActiveTab(tab)
+  $('unrec-count').textContent = album.unrecognized_count > 0
+    ? `(${album.unrecognized_count})` : ''
+
+  await loadStream(false)
+
+  if (!album.is_uncategorized) {
+    _get(`/api/albums/${album.id}/progress`).then(prog => {
+      if (prog.pending > 0) startOcrPolling(album.id)
+    }).catch(() => {})
+  }
+}
+
+async function navSearch(bib) {
+  if (!bib || !/^\d{1,6}$/.test(bib)) { toast('請輸入 1–6 位數字'); return }
+  if (!S.album) return
+  S.view = 'search'; S.bib = bib
+  S.photos = []; S.hasMore = false
+
+  showEl('upload-view', false)
+  $('album-grid').classList.add('hidden')
+  showTabsBar(false); showEl('search-header', true)
+  $('search-bib-label').textContent = bib; $('search-count').textContent = ''
+  setHeader(S.album ? true : false, S.album?.name)
+  clearGrid(); setGridVisible(false); showSkeleton(true); showEl('load-more-wrap', false); showEmpty(false)
+
+  try {
+    const data = await api.search(bib, S.album?.id)
+    showSkeleton(false)
+    S.photos = data.photos
+    $('search-count').textContent = `共 ${data.count} 張`
+    if (!data.count) {
+      showEmpty(true, `找不到號碼 ${bib} 的照片`, '照片可能尚未上傳，或號碼辨識未涵蓋到')
+      return
+    }
+    setGridVisible(true)
+    appendPhotos(data.photos)
+    $('btn-back-search').onclick = () => S.album ? navAlbum(S.album, S.tab) : navHome()
+  } catch(e) { showSkeleton(false); toast(e.message) }
+}
+
+async function loadStream(append = false) {
+  if (!append) {
+    clearGrid(); showSkeleton(true); showEl('load-more-wrap', false); showEmpty(false)
+  }
+  const unrec = S.tab === 'unrecognized'
+  try {
+    const data = await api.stream(S.album?.id, S.page, unrec)
+    showSkeleton(false)
+    $('photo-total').textContent = `共 ${data.total} 張`
+    S.total = data.total; S.hasMore = data.has_more
+
+    if (!data.total && !append) {
+      showEmpty(true,
+        unrec ? '沒有未辨識的照片' : '這個相簿還沒有照片',
+        unrec ? '所有照片都已成功辨識號碼' : Auth.isLoggedIn() ? '請點擊上方「上傳」上傳照片' : '請聯絡攝影師上傳照片')
+      return
+    }
+
+    if (append) { S.photos = [...S.photos, ...data.photos] }
+    else { S.photos = data.photos; setGridVisible(true) }
+    appendPhotos(data.photos)
+    showEl('load-more-wrap', S.hasMore)
+  } catch(e) { showSkeleton(false); toast(e.message) }
+}
+
+// ── Grid rendering ─────────────────────────────────────────────────────────────
+// Append-stable masonry: cards are placed by absolute index (idx % colCount),
+// a deterministic round-robin so photos always land in the same column and
+// never reshuffle — and so placement doesn't depend on lazy-loaded image
+// heights, which aren't known yet at append time.
+let masonryCols = []
+
+function masonryColCount() {
+  const w = $('photo-grid').clientWidth || window.innerWidth
+  return Math.max(1, Math.min(4, Math.floor((w + 16) / (200 + 16))))
+}
+
+function buildMasonryCols() {
+  const grid = $('photo-grid')
+  grid.innerHTML = ''
+  masonryCols = []
+  for (let i = 0; i < masonryColCount(); i++) {
+    const col = document.createElement('div')
+    col.className = 'masonry-col'
+    grid.appendChild(col)
+    masonryCols.push(col)
+  }
+}
+
+let masonryResizeTimer = null
+window.addEventListener('resize', () => {
+  clearTimeout(masonryResizeTimer)
+  masonryResizeTimer = setTimeout(() => {
+    if (masonryCols.length && masonryColCount() !== masonryCols.length) {
+      buildMasonryCols()
+      appendPhotos(S.photos)
+    }
+  }, 200)
+})
+
+function appendPhotos(photos) {
+  if (!masonryCols.length) buildMasonryCols()
+  photos.forEach(photo => {
+    let idx = S.photos.indexOf(photo)
+    if (idx === -1) idx = S.photos.length - photos.length
+    const card = makePhotoCard(photo, idx)
+    if (card) masonryCols[idx % masonryCols.length].appendChild(card)
+  })
+}
+
+function _getAlbumOwner() {
+  if (!S.album) return null
+  const album = S.albums.find(a => a.id === S.album.id) || S.album
+  return album.owner_id
+}
+
+function makePhotoCard(photo, idx) {
+  if (photo.file_exists === false) return null
+
+  const item = document.createElement('div')
+  item.className = 'masonry-item cursor-pointer'
+
+  const bibs = photo.bib_numbers
+  const badgeHtml = bibs.length
+    ? `<span class="bg-sakura-600/90 text-white text-xs font-semibold px-2 py-0.5 rounded">${bibs.join('  ')}</span>`
+    : photo.ocr_status === 'pending'
+      ? `<span class="bg-blue-400/75 text-white text-xs px-2 py-0.5 rounded">辨識中</span>`
+      : `<span class="bg-sumi-700/70 text-sumi-200 text-xs px-2 py-0.5 rounded">未辨識</span>`
+
+  const albumOwnerId = _getAlbumOwner()
+  const canDelete = Auth.canManagePhoto(albumOwnerId)
+
+  const deleteBtn = canDelete
+    ? `<button onclick="event.stopPropagation();confirmDeletePhoto(${photo.photo_id})"
+         class="bg-red-600/70 hover:bg-red-600 text-white text-xs px-2 py-0.5 rounded transition-all">
+         刪除
+       </button>`
+    : ''
+
+  item.innerHTML = `
+    <img src="${photo.url}" alt="${esc(photo.original_filename)}" loading="lazy"
+         class="w-full rounded-lg" />
+    <div class="photo-overlay">
+      <div class="flex items-end justify-between gap-1 flex-wrap">
+        ${badgeHtml}
+        <div class="flex gap-1.5 items-center">
+          <button data-filename="${esc(photo.original_filename)}"
+            onclick="event.stopPropagation();downloadPhoto(${photo.photo_id}, this.dataset.filename)"
+            class="bg-white/15 hover:bg-white/30 text-white text-xs px-2 py-0.5 rounded transition-all">
+            下載
+          </button>
+          ${deleteBtn}
+        </div>
+      </div>
+    </div>`
+
+  item.addEventListener('click', () => openLightbox(idx))
+  return item
+}
+
+function makeAlbumCard(album) {
+  const card = document.createElement('div')
+  const isUncategorized = album.is_uncategorized
+  card.className = 'album-card bg-white rounded-lg border border-sumi-200 overflow-hidden cursor-pointer'
+
+  const accentColor = isUncategorized ? 'bg-sumi-200' : 'bg-sakura-300'
+  const canDelete = !isUncategorized && Auth.canManageAlbum(album)
+
+  const deleteBtn = canDelete
+    ? `<button data-album-name="${esc(album.name)}"
+         onclick="event.stopPropagation();confirmDeleteAlbum(${album.id}, this.dataset.albumName, this)"
+         class="btn-danger-sm ml-auto">
+         刪除
+       </button>`
+    : ''
+
+  const ownerBadge = album.owner_username && !isUncategorized
+    ? `<span class="text-xs text-sumi-400 tracking-wide">${esc(album.owner_username)}</span>`
+    : ''
+
+  card.innerHTML = `
+    <div class="${accentColor} h-1"></div>
+    <div class="p-5">
+      <h3 class="font-medium ${isUncategorized ? 'text-sumi-400' : 'text-sumi-800'} leading-snug text-sm mb-2.5 tracking-wide">${esc(album.name)}</h3>
+      ${album.event_date ? `<p class="text-xs text-sumi-400 mb-1 tracking-wide">${album.event_date}</p>` : ''}
+      ${album.description ? `<p class="text-xs text-sumi-400 truncate mb-2.5">${esc(album.description)}</p>` : ''}
+      <div class="flex flex-wrap gap-1.5 items-center mt-2">
+        <span class="pill bg-sumi-100 text-sumi-600">${album.photo_count} 張</span>
+        ${album.unrecognized_count > 0
+          ? `<span class="pill bg-amber-50 text-amber-600 border border-amber-200">未辨識 ${album.unrecognized_count}</span>`
+          : ''}
+        ${ownerBadge}
+        ${deleteBtn}
+      </div>
+    </div>`
+
+  card.addEventListener('click', () => navAlbum(album))
+  return card
+}
+
+// ── Delete actions ─────────────────────────────────────────────────────────────
+function confirmDeleteAlbum(albumId, albumName) {
+  if (!Auth.isLoggedIn()) { openAuthModal(); return }
+  openDeleteModal(
+    '刪除相簿',
+    `確定要刪除「${albumName}」嗎？此相簿內所有照片也將一併刪除，無法復原。`,
+    async () => {
+      await api.deleteAlbum(albumId)
+      toast('相簿已刪除')
+      await navHome()
+    }
+  )
+}
+
+function confirmDeletePhoto(photoId) {
+  if (!Auth.isLoggedIn()) { openAuthModal(); return }
+  openDeleteModal(
+    '刪除照片',
+    '確定要刪除這張照片嗎？此操作無法復原。',
+    async () => {
+      await api.deletePhoto(photoId)
+      toast('照片已刪除')
+      const idx = S.photos.findIndex(p => p.photo_id === photoId)
+      if (idx !== -1) S.photos.splice(idx, 1)
+      if (S.view === 'album') { S.page = 1; await loadStream(false) }
+      else if (S.view === 'search') await navSearch(S.bib)
+      else await navHome()
+    }
+  )
+}
+
+// ── Lightbox ───────────────────────────────────────────────────────────────────
+function openLightbox(idx) {
+  S.lbIdx = idx; renderLightbox()
+  $('lightbox').classList.add('open')
+}
+function closeLightbox() { $('lightbox').classList.remove('open') }
+function lbPrev() { if (S.lbIdx > 0) { S.lbIdx--; renderLightbox() } }
+function lbNext() { if (S.lbIdx < S.photos.length - 1) { S.lbIdx++; renderLightbox() } }
+
+function renderLightbox() {
+  const p = S.photos[S.lbIdx]
+  if (!p) return
+  $('lightbox-img').src = p.url
+  $('lb-filename').textContent = p.original_filename
+  $('lb-bibs').textContent = p.bib_numbers.length ? `號碼：${p.bib_numbers.join(', ')}` : '（未辨識）'
+  $('lb-counter').textContent = `${S.lbIdx + 1} / ${S.photos.length}`
+  $('lb-prev').style.visibility = S.lbIdx > 0 ? 'visible' : 'hidden'
+  $('lb-next').style.visibility = S.lbIdx < S.photos.length - 1 ? 'visible' : 'hidden'
+
+  const albumOwnerId = _getAlbumOwner()
+  const canDelete = Auth.canManagePhoto(albumOwnerId)
+  $('lb-delete').classList.toggle('hidden', !canDelete)
+}
+
+function lbDownload() {
+  const p = S.photos[S.lbIdx]
+  if (p) downloadPhoto(p.photo_id, p.original_filename)
+}
+
+function lbDeletePhoto() {
+  const p = S.photos[S.lbIdx]
+  if (!p) return
+  closeLightbox()
+  confirmDeletePhoto(p.photo_id)
+}
+
+function downloadPhoto(photoId, filename) {
+  const a = document.createElement('a')
+  a.href = `/api/photos/${photoId}/download`
+  a.download = filename; a.click()
+}
+
+document.addEventListener('keydown', e => {
+  if (!$('lightbox').classList.contains('open')) return
+  if (e.key === 'ArrowLeft')  lbPrev()
+  if (e.key === 'ArrowRight') lbNext()
+  if (e.key === 'Escape')     closeLightbox()
+})
+
+// ── Upload ─────────────────────────────────────────────────────────────────────
+let selectedFiles = []
+let _newAlbumFormVisible = false
+
+$('file-input').addEventListener('change', e => setFiles(Array.from(e.target.files)))
+$('drop-zone').addEventListener('dragover',  e => { e.preventDefault(); $('drop-zone').classList.add('dragging') })
+$('drop-zone').addEventListener('dragleave', () => $('drop-zone').classList.remove('dragging'))
+$('drop-zone').addEventListener('drop', e => {
+  e.preventDefault(); $('drop-zone').classList.remove('dragging')
+  setFiles(Array.from(e.dataTransfer.files))
+})
+
+function updateUploadBtn() {
+  const hasFiles = selectedFiles.length > 0
+  const hasAlbum = $('upload-album-select').value !== ''
+  $('btn-upload').disabled = !hasFiles || !hasAlbum
+}
+
+function setFiles(files) {
+  selectedFiles = files
+  $('file-list').innerHTML = files.map(f =>
+    `<div class="flex gap-2 truncate text-xs">
+       <span class="text-sumi-400">—</span>
+       <span class="truncate text-sumi-600">${esc(f.name)}</span>
+       <span class="ml-auto text-sumi-300">${(f.size/1024).toFixed(0)} KB</span>
+     </div>`
+  ).join('')
+  updateUploadBtn()
+}
+
+$('upload-album-select').addEventListener('change', updateUploadBtn)
+
+$('btn-show-new-album').addEventListener('click', () => {
+  _newAlbumFormVisible = !_newAlbumFormVisible
+  showEl('new-album-form', _newAlbumFormVisible)
+  if (_newAlbumFormVisible) setTimeout(() => $('new-album-name').focus(), 50)
+})
+
+$('btn-cancel-new-album').addEventListener('click', () => {
+  _newAlbumFormVisible = false
+  showEl('new-album-form', false)
+  $('new-album-name').value = ''
+  $('new-album-date').value = ''
+  $('new-album-desc').value = ''
+})
+
+$('btn-create-album').addEventListener('click', async () => {
+  if (!Auth.isLoggedIn()) { openAuthModal(); return }
+  const name = $('new-album-name').value.trim()
+  if (!name) { toast('請輸入相簿名稱'); return }
+  try {
+    const a = await api.createAlbum(name, $('new-album-date').value, $('new-album-desc').value.trim())
+    toast(`相簿「${a.name}」建立成功`)
+    $('new-album-name').value = ''; $('new-album-date').value = ''; $('new-album-desc').value = ''
+    _newAlbumFormVisible = false
+    showEl('new-album-form', false)
+    S.albums = await api.albums()
+    await refreshAlbumSelect(a.id)
+  } catch(e) { toast(e.message) }
+})
+
+$('btn-upload').addEventListener('click', async () => {
+  if (!Auth.isLoggedIn()) { openAuthModal(); return }
+  if (!selectedFiles.length) return
+
+  const albumId = $('upload-album-select').value
+  if (!albumId) { toast('請先選擇相簿'); return }
+
+  $('btn-upload').disabled = true
+  $('upload-status').textContent = ''
+  $('upload-results').classList.add('hidden')
+  $('upload-album-link').classList.add('hidden')
+
+  const fd = new FormData()
+  selectedFiles.forEach(f => fd.append('files', f))
+  fd.append('album_id', albumId)
+
+  $('upload-progress-wrap').classList.remove('hidden')
+  $('upload-bar').style.width = '0%'
+  $('upload-pct').textContent = '0%'
+
+  try {
+    const data = await _uploadXhr(fd, pct => {
+      $('upload-bar').style.width = pct + '%'
+      $('upload-pct').textContent = pct + '%'
+    })
+    $('upload-progress-wrap').classList.add('hidden')
+    $('upload-status').textContent = `已上傳 ${data.uploaded} 張，辨識中…`
+    $('upload-results').classList.remove('hidden')
+    $('upload-results').innerHTML = data.results.map(r => r.success
+      ? `<div class="flex gap-2 text-xs bg-sumi-50 rounded px-3 py-1.5">
+           <span class="truncate text-sumi-400 max-w-xs">${esc(r.original_filename)}</span>
+           <span class="ml-auto font-medium text-amber-500">辨識中</span>
+         </div>`
+      : `<div class="text-xs text-red-500">${esc(r.original_filename)}: ${r.error || '失敗'}</div>`
+    ).join('')
+
+    S.albums = await api.albums()
+    const targetAlbum = S.albums.find(a => a.id === parseInt(albumId))
+    if (targetAlbum) {
+      $('upload-album-link').classList.remove('hidden')
+      $('btn-go-to-album').textContent = `→ 前往查看「${targetAlbum.name}」`
+      $('btn-go-to-album').onclick = () => navAlbum(targetAlbum)
+    }
+
+    toast(`已上傳 ${data.uploaded} 張，正在背景辨識中`)
+    selectedFiles = []; $('file-list').innerHTML = ''; $('file-input').value = ''
+    updateUploadBtn()
+  } catch(e) {
+    $('upload-progress-wrap').classList.add('hidden')
+    toast(e.message)
+    updateUploadBtn()
+  }
+})
+
+$('btn-reprocess').addEventListener('click', async () => {
+  if (!Auth.isLoggedIn()) { openAuthModal(); return }
+  $('btn-reprocess').disabled = true
+  $('reprocess-status').textContent = '辨識中（可能需要數分鐘）…'
+  const albumIdVal = $('upload-album-select').value
+  const albumId = S.view === 'album' ? S.album?.id
+                : albumIdVal ? parseInt(albumIdVal)
+                : null
+  try {
+    const data = await api.reprocess(albumId, true)
+    $('reprocess-status').textContent = `完成：${data.recognized}/${data.processed} 張辨識成功`
+    toast(`重新辨識完成：${data.recognized}/${data.processed} 張成功`)
+    if (S.view === 'album') { S.page = 1; await loadStream(false) }
+  } catch(e) { $('reprocess-status').textContent = '發生錯誤：' + e.message; toast(e.message) }
+  finally { $('btn-reprocess').disabled = false }
+})
+
+$('btn-nav-upload').addEventListener('click', navUpload)
+
+// ── Tabs ───────────────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
+  if (btn.closest('#auth-modal')) return
+  btn.addEventListener('click', async () => {
+    S.tab = btn.dataset.tab; S.page = 1
+    setActiveTab(S.tab)
+    await loadStream(false)
+  })
+})
+
+function setActiveTab(tab) {
+  document.querySelectorAll('.tab-btn[data-tab]').forEach(b => {
+    if (b.closest('#auth-modal')) return
+    b.classList.toggle('active', b.dataset.tab === tab)
+  })
+}
+
+// ── Load more ──────────────────────────────────────────────────────────────────
+$('btn-load-more').addEventListener('click', async () => {
+  S.page++
+  $('btn-load-more').textContent = '載入中…'; $('btn-load-more').disabled = true
+  await loadStream(true)
+  $('btn-load-more').textContent = '載入更多'; $('btn-load-more').disabled = false
+})
+
+// ── Search ─────────────────────────────────────────────────────────────────────
+function handleSearch() {
+  const val = $('bib-input').value.trim()
+  if (S.view === 'home') renderAlbumGrid(val)
+  else navSearch(val)
+}
+
+$('btn-search').addEventListener('click', handleSearch)
+$('bib-input').addEventListener('keydown', e => { if (e.key === 'Enter') handleSearch() })
+$('bib-input').addEventListener('input', () => { if (S.view === 'home') renderAlbumGrid($('bib-input').value) })
+$('btn-home').addEventListener('click', () => { $('bib-input').value = ''; navHome() })
+
+// ── OCR Progress Polling ───────────────────────────────────────────────────────
+let _ocrPollTimer = null
+
+function startOcrPolling(albumId) {
+  stopOcrPolling()
+  _pollOcr(albumId)
+  _ocrPollTimer = setInterval(() => _pollOcr(albumId), 2500)
+}
+
+function stopOcrPolling() {
+  if (_ocrPollTimer) { clearInterval(_ocrPollTimer); _ocrPollTimer = null }
+}
+
+async function _pollOcr(albumId) {
+  try {
+    const data = await _get(`/api/albums/${albumId}/progress`)
+    if (data.pending === 0) {
+      stopOcrPolling()
+      const wasVisible = !$('ocr-banner').classList.contains('hidden')
+      showEl('ocr-banner', false)
+      await refreshUnrecognizedCount(albumId)
+      if (wasVisible && S.view === 'album' && S.album?.id === albumId) {
+        S.page = 1; await loadStream(false)
+      }
+      return
+    }
+    showEl('ocr-banner', true)
+    const pct = data.total > 0 ? Math.round(data.done / data.total * 100) : 0
+    $('ocr-bar').style.width = pct + '%'
+    $('ocr-progress-text').textContent = `${data.done}/${data.total}`
+  } catch {}
+}
+
+// Re-fetch album list so the "未辨識" badge (header + home grid) reflects
+// the latest OCR results without requiring a page reload.
+async function refreshUnrecognizedCount(albumId) {
+  try {
+    S.albums = await api.albums()
+    const updated = S.albums.find(a => a.id === albumId)
+    if (!updated) return
+
+    if (S.album?.id === albumId) {
+      S.album.unrecognized_count = updated.unrecognized_count
+      S.album.photo_count = updated.photo_count
+      $('unrec-count').textContent = updated.unrecognized_count > 0
+        ? `(${updated.unrecognized_count})` : ''
+    }
+    if (S.view === 'home') renderAlbumGrid($('bib-input').value)
+  } catch {}
+}
+
+// ── XHR Upload ─────────────────────────────────────────────────────────────────
+function _uploadXhr(fd, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.upload.addEventListener('progress', e => {
+      if (e.lengthComputable) onProgress(Math.round(e.loaded / e.total * 100))
+    })
+    xhr.addEventListener('load', () => {
+      try {
+        const data = JSON.parse(xhr.responseText)
+        xhr.status >= 200 && xhr.status < 300
+          ? resolve(data)
+          : reject(new Error(data.detail || '上傳失敗'))
+      } catch { reject(new Error('回應解析失敗')) }
+    })
+    xhr.addEventListener('error', () => reject(new Error('網路錯誤')))
+    xhr.open('POST', '/api/upload')
+    if (Auth.token) xhr.setRequestHeader('Authorization', `Bearer ${Auth.token}`)
+    xhr.send(fd)
+  })
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function $(id) { return document.getElementById(id) }
+
+function esc(str) {
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+}
+
+function showEl(id, show) {
+  const el = $(id); if (!el) return
+  el.classList.toggle('hidden', !show)
+  if (show && el.classList.contains('flex')) el.style.display = 'flex'
+}
+
+function setHeader(showCrumb, name = '') {
+  const el = $('breadcrumb')
+  el.classList.toggle('hidden', !showCrumb)
+  if (showCrumb) { el.classList.add('flex'); $('breadcrumb-name').textContent = name }
+}
+
+function showTabsBar(show) {
+  const el = $('tabs-bar')
+  el.classList.toggle('hidden', !show)
+  if (show) el.style.display = 'flex'
+}
+
+function clearGrid() { buildMasonryCols() }
+function setGridVisible(v) { $('photo-grid').classList.toggle('hidden', !v) }
+function showSkeleton(v) { $('state-skeleton').classList.toggle('hidden', !v) }
+function showEmpty(v, msg = '', sub = '') {
+  $('state-empty').classList.toggle('hidden', !v)
+  if (v) { $('empty-msg').textContent = msg; $('empty-sub').textContent = sub }
+}
+
+function toast(msg, ms = 3000) {
+  const el = $('toast')
+  el.textContent = msg; el.classList.remove('hidden'); el.style.opacity = '1'
+  clearTimeout(el._t)
+  el._t = setTimeout(() => {
+    el.style.opacity = '0'; setTimeout(() => el.classList.add('hidden'), 300)
+  }, ms)
+}
+
+async function refreshAlbumSelect(autoSelectId = null) {
+  const sel = $('upload-album-select')
+  const cur = autoSelectId ? String(autoSelectId) : sel.value
+  const albums = await api.albums().catch(() => [])
+  sel.innerHTML = '<option value="">請先選擇相簿</option>'
+  albums
+    .filter(a => !a.is_uncategorized && (Auth.isAdmin() || a.owner_id === Auth.user?.id))
+    .forEach(a => {
+      const opt = document.createElement('option')
+      opt.value = a.id; opt.textContent = a.name + (a.event_date ? ` (${a.event_date})` : '')
+      sel.appendChild(opt)
+    })
+  if (cur) sel.value = cur
+  updateUploadBtn()
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+async function init() {
+  await loadSiteSettings()
+  if (Auth.isLoggedIn()) {
+    try {
+      const me = await api.me()
+      Auth.save(Auth.token, me)
+    } catch {
+      Auth.clear()
+    }
+  }
+  updateAuthUI()
+  navHome()
+}
+
+init()
+</script>
+</body>
+</html>
