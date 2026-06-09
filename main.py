@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import io
 import os
+import re
 import uuid
 import shutil
 from datetime import datetime, timedelta
@@ -11,9 +12,10 @@ from typing import List, Optional
 
 import json
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 from fastapi import BackgroundTasks, Cookie, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -95,6 +97,10 @@ def _load_secret_key() -> str:
 
     key = uuid.uuid4().hex + uuid.uuid4().hex
     key_file.write_text(key, encoding="utf-8")
+    try:
+        key_file.chmod(0o600)  # owner read/write only — prevents other OS users from reading the JWT signing key
+    except Exception:
+        pass
     return key
 
 
@@ -161,6 +167,8 @@ ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/bm
 EXT_BY_FORMAT = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp", "GIF": ".gif", "BMP": ".bmp"}
 
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_SIZE_MB", "20")) * 1024 * 1024
+WEBP_QUALITY = int(os.getenv("WEBP_QUALITY", "85"))
+THUMB_MAX_PX = int(os.getenv("THUMB_MAX_PX", "600"))
 
 
 def _verify_image(raw: bytes) -> Optional[str]:
@@ -171,6 +179,23 @@ def _verify_image(raw: bytes) -> Optional[str]:
             return img.format
     except Exception:
         return None
+
+
+def _to_webp(raw: bytes, max_width: int = 0) -> bytes:
+    """Convert image bytes to WebP, applying EXIF orientation and stripping metadata.
+    If max_width > 0 and image is wider, downscale proportionally."""
+    with Image.open(io.BytesIO(raw)) as img:
+        img = ImageOps.exif_transpose(img)
+        if img.mode == "P":
+            img = img.convert("RGBA")
+        elif img.mode not in ("RGB", "RGBA"):
+            img = img.convert("RGB")
+        if max_width > 0 and img.width > max_width:
+            new_h = int(img.height * max_width / img.width)
+            img = img.resize((max_width, new_h), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="WEBP", quality=WEBP_QUALITY, method=4)
+        return buf.getvalue()
 
 
 def _load_settings() -> dict:
@@ -217,13 +242,24 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Content-Security-Policy"] = _CSP
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-Content-Type-Options"] = "nosniff"
-        # HSTS: 2 years, include subdomains, ready for preload submission
-        # Remove or shorten max-age if you're still testing on HTTP locally
-        response.headers["Strict-Transport-Security"] = (
-            "max-age=63072000; includeSubDomains; preload"
-        )
+        # HSTS: disable with ENABLE_HSTS=false in local HTTP dev environments
+        if os.getenv("ENABLE_HSTS", "true").lower() != "false":
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=63072000; includeSubDomains; preload"
+            )
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+
+        path = request.url.path
+        if path.startswith("/uploads/"):
+            # UUID filenames are content-addressable and never mutate
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        elif path.startswith("/static/"):
+            # Logo/static assets may be replaced, so allow revalidation after 1 day
+            response.headers["Cache-Control"] = "public, max-age=86400"
+        elif path == "/" or path.endswith(".html"):
+            response.headers["Cache-Control"] = "no-cache"
+
         return response
 
 
@@ -231,6 +267,8 @@ app = FastAPI(title="Bib Number Recognition API", version="3.0.0")
 
 # SecurityHeadersMiddleware must be added first so headers are applied to every response.
 app.add_middleware(SecurityHeadersMiddleware)
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.add_middleware(
     CORSMiddleware,
@@ -376,6 +414,10 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
         raise HTTPException(400, "顯示名稱不得為空")
     if len(req.username) < 2:
         raise HTTPException(400, "帳號至少需要 2 個字元")
+    if len(req.username) > 32:
+        raise HTTPException(400, "帳號最多 32 個字元")
+    if not re.fullmatch(r"[A-Za-z0-9_\-\.]+", req.username):
+        raise HTTPException(400, "帳號只能使用英文字母、數字及 _ - . 符號")
     if len(req.password) < 6:
         raise HTTPException(400, "密碼至少需要 6 個字元")
     if db.query(User).filter(User.username == req.username).first():
@@ -668,7 +710,7 @@ async def upload_photos(
     for upload in files:
         if upload.content_type not in ALLOWED_TYPES:
             results.append({"original_filename": upload.filename, "success": False,
-                            "error": f"Unsupported type: {upload.content_type}"})
+                            "error": "不支援的檔案格式（請使用 JPG、PNG 或 WebP）"})
             continue
 
         raw = await upload.read()
@@ -681,15 +723,17 @@ async def upload_photos(
         # are client-controlled) — verify the bytes are actually a decodable image
         # and pick the stored extension from the verified format.
         fmt = _verify_image(raw)
-        ext = EXT_BY_FORMAT.get(fmt or "")
-        if not ext:
+        if not EXT_BY_FORMAT.get(fmt or ""):
             results.append({"original_filename": upload.filename, "success": False,
                             "error": "檔案內容不是有效的圖片"})
             continue
 
-        stored_name = f"{uuid.uuid4()}{ext}"
+        uid = uuid.uuid4()
+        stored_name = f"{uid}.webp"
         dest = UPLOAD_DIR / stored_name
-        dest.write_bytes(raw)
+        webp_bytes = _to_webp(raw)
+        dest.write_bytes(webp_bytes)
+        (UPLOAD_DIR / f"{uid}_thumb.webp").write_bytes(_to_webp(raw, max_width=THUMB_MAX_PX))
 
         photo = Photo(
             filename=stored_name,
@@ -899,17 +943,16 @@ async def upload_logo(
 
     raw = await file.read()
     fmt = _verify_image(raw)
-    ext = EXT_BY_FORMAT.get(fmt or "")
-    if not ext:
+    if not EXT_BY_FORMAT.get(fmt or ""):
         raise HTTPException(400, "檔案內容不是有效的圖片")
 
     for old in STATIC_DIR.glob("logo.*"):
         old.unlink(missing_ok=True)
 
-    logo_path = STATIC_DIR / f"logo{ext}"
-    logo_path.write_bytes(raw)
+    logo_path = STATIC_DIR / "logo.webp"
+    logo_path.write_bytes(_to_webp(raw))
 
-    logo_url = f"/static/logo{ext}"
+    logo_url = "/static/logo.webp"
     settings = _load_settings()
     settings["logo_url"] = logo_url
     _save_settings(settings)
@@ -1086,9 +1129,17 @@ def _process_ocr(photo_id: int, file_path: str) -> None:
 def _photo_dict(p: Photo) -> dict:
     url = p.storage_url if p.storage_url else f"/uploads/{p.filename}"
     file_exists = bool(p.storage_url) or (UPLOAD_DIR / p.filename).exists()
+
+    if p.storage_url:
+        thumb_url = url
+    else:
+        thumb_name = p.filename.replace(".webp", "_thumb.webp")
+        thumb_url = f"/uploads/{thumb_name}" if (UPLOAD_DIR / thumb_name).exists() else url
+
     return {
         "photo_id": p.id,
         "url": url,
+        "thumb_url": thumb_url,
         "original_filename": p.original_filename,
         "bib_numbers": [b.bib_number for b in p.bib_numbers],
         "album_id": p.album_id,

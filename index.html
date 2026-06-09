@@ -74,6 +74,9 @@
     .album-card { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
     .album-card:hover { transform: translateY(-2px); border-color: #D2BAB5; box-shadow: 0 8px 24px rgba(58,40,38,.07); }
 
+    /* Copy link button */
+    .album-copy-btn { opacity: 1; transition: color .18s, background .18s; }
+
     /* Inputs */
     .jp-input {
       border: 1px solid #D9D5D0; border-radius: .375rem; padding: .5rem .75rem;
@@ -243,19 +246,9 @@
       </span>
     </div>
 
-    <!-- Search -->
-    <div class="flex gap-2 w-full sm:gap-2.5 sm:flex-1 sm:max-w-sm sm:ml-auto order-last sm:order-none">
-      <input id="bib-input" type="text" maxlength="40"
-        placeholder="搜尋相簿名稱…"
-        class="jp-input flex-1 min-w-0 !py-2" />
-      <button id="btn-search" class="btn-primary whitespace-nowrap px-5">搜尋</button>
-    </div>
-
-    <!-- Upload button -->
-    <button id="btn-nav-upload" class="hidden btn-ghost text-sm px-3 py-2 whitespace-nowrap">上傳</button>
-
     <!-- Auth area -->
-    <div id="auth-area" class="flex items-center gap-2 ml-auto sm:ml-0">
+    <div id="auth-area" class="flex items-center gap-2 ml-auto">
+      <button id="btn-nav-upload" class="hidden btn-ghost text-sm px-3 py-2 whitespace-nowrap">上傳</button>
       <div id="auth-guest" class="flex gap-2">
         <button onclick="openAuthModal('login')" class="btn-ghost text-sm px-3 py-2">登入</button>
         <button onclick="openAuthModal('register')" class="btn-sakura text-sm px-3 py-2">註冊</button>
@@ -673,6 +666,21 @@
     </div>
   </div>
 
+  <!-- Search Section -->
+  <div id="search-section" class="mb-8">
+    <div class="flex gap-2.5 items-center">
+      <div class="relative flex-1">
+        <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-sumi-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <input id="bib-input" type="text" maxlength="40"
+          placeholder="搜尋相簿名稱…"
+          class="jp-input !pl-10 !py-3 w-full" />
+      </div>
+      <button id="btn-search" class="btn-primary whitespace-nowrap px-6 !py-3">搜尋</button>
+    </div>
+  </div>
+
   <!-- Search result header -->
   <div id="search-header" class="hidden mb-7 flex items-center gap-3">
     <button id="btn-back-search" class="text-sakura-600 hover:text-sakura-800 text-sm font-medium tracking-wide transition-colors">← 返回</button>
@@ -782,12 +790,18 @@
     <p class="text-sm mt-1.5 text-sumi-400" id="empty-sub"></p>
   </div>
 
-  <!-- Load more -->
-  <div id="load-more-wrap" class="hidden text-center mt-10">
-    <button id="btn-load-more"
-      class="bg-white hover:bg-sumi-50 text-sumi-600 font-medium px-9 py-2.5
-             rounded-full border border-sumi-200 transition-all text-sm tracking-wide">
-      載入更多
+  <!-- Pagination -->
+  <div id="pagination-wrap" class="hidden mt-10 mb-4 flex items-center justify-center gap-1.5 flex-wrap">
+    <button id="btn-page-prev"
+      class="px-3 py-2 rounded-md border border-sumi-200 bg-white text-sumi-600 hover:bg-sumi-50
+             transition-all text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
+      ‹
+    </button>
+    <div id="page-numbers" class="flex items-center gap-1"></div>
+    <button id="btn-page-next"
+      class="px-3 py-2 rounded-md border border-sumi-200 bg-white text-sumi-600 hover:bg-sumi-50
+             transition-all text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
+      ›
     </button>
   </div>
 
@@ -923,6 +937,7 @@ const S = {
   page: 1,
   hasMore: false,
   total: 0,
+  totalPages: 1,
   lbIdx: -1,
   albums: [],
 }
@@ -1514,12 +1529,14 @@ function confirmDeleteAdminUser(userId, username) {
 async function navHome() {
   fadeMain(true)
   S.view = 'home'; S.album = null; S.bib = ''
+  if (window.location.search) history.pushState(null, '', window.location.pathname)
   $('bib-input').value = ''
   $('bib-input').placeholder = '搜尋相簿名稱…'
+  showEl('search-section', true)
   stopOcrPolling()
   showEl('ocr-banner', false)
   setHeader(false); showTabsBar(false); showEl('search-header', false)
-  setGridVisible(false); showEl('load-more-wrap', false); clearGrid()
+  setGridVisible(false); showEl('pagination-wrap', false); clearGrid()
   showEl('upload-view', false)
 
   const grid = $('album-grid')
@@ -1536,12 +1553,14 @@ function navUpload() {
   if (!Auth.isLoggedIn()) { openAuthModal('login'); return }
   fadeMain(true)
   S.view = 'upload'; S.album = null; S.bib = ''
+  if (window.location.search) history.pushState(null, '', window.location.pathname)
   $('bib-input').value = ''
   $('bib-input').placeholder = '搜尋相簿名稱…'
+  showEl('search-section', false)
   stopOcrPolling()
   showEl('ocr-banner', false)
   setHeader(false); showTabsBar(false); showEl('search-header', false)
-  setGridVisible(false); showEl('load-more-wrap', false); clearGrid()
+  setGridVisible(false); showEl('pagination-wrap', false); clearGrid()
   $('album-grid').classList.add('hidden')
 
   _newAlbumFormVisible = false
@@ -1598,8 +1617,10 @@ async function navAlbum(album, tab = 'all') {
   S.view = 'album'; S.album = album; S.tab = tab
   S.page = 1; S.photos = []; S.hasMore = false
 
+  history.pushState(null, '', '?album=' + album.id)
   $('bib-input').value = ''
   $('bib-input').placeholder = `在「${album.name}」搜尋號碼…`
+  showEl('search-section', true)
   stopOcrPolling()
   showEl('ocr-banner', false)
   showEl('upload-view', false)
@@ -1631,7 +1652,7 @@ async function navSearch(bib) {
   showTabsBar(false); showEl('search-header', true)
   $('search-bib-label').textContent = bib; $('search-count').textContent = ''
   setHeader(S.album ? true : false, S.album?.name)
-  clearGrid(); setGridVisible(false); showSkeleton(true); showEl('load-more-wrap', false); showEmpty(false)
+  clearGrid(); setGridVisible(false); showSkeleton(true); showEl('pagination-wrap', false); showEmpty(false)
 
   try {
     const data = await api.search(bib, S.album?.id)
@@ -1651,31 +1672,32 @@ async function navSearch(bib) {
 }
 
 async function loadStream(append = false, fade = false) {
-  if (fade && !append) fadeMain(true)
-  if (!append) {
-    clearGrid(); showSkeleton(true); showEl('load-more-wrap', false); showEmpty(false)
-  }
+  if (fade) fadeMain(true)
+  clearGrid(); showSkeleton(true); showEl('pagination-wrap', false); showEmpty(false)
   const unrec = S.tab === 'unrecognized'
   try {
     const data = await api.stream(S.album?.id, S.page, unrec)
     showSkeleton(false)
+    const totalPages = Math.ceil(data.total / 24)
     $('photo-total').textContent = `共 ${data.total} 張`
-    S.total = data.total; S.hasMore = data.has_more
+    S.total = data.total; S.hasMore = data.has_more; S.totalPages = totalPages
 
-    if (!data.total && !append) {
+    if (!data.total) {
       showEmpty(true,
         unrec ? '沒有未辨識的照片' : '這個相簿還沒有照片',
         unrec ? '所有照片都已成功辨識號碼' : Auth.isLoggedIn() ? '請點擊上方「上傳」上傳照片' : '請聯絡攝影師上傳照片')
-      if (fade && !append) fadeMain(false)
+      if (fade) fadeMain(false)
       return
     }
 
-    if (append) { S.photos = [...S.photos, ...data.photos] }
-    else { S.photos = data.photos; setGridVisible(true) }
+    S.photos = data.photos
+    setGridVisible(true)
     appendPhotos(data.photos)
-    showEl('load-more-wrap', S.hasMore)
+    renderPagination(S.page, totalPages)
+    showEl('pagination-wrap', totalPages > 1)
+    if (!append) window.scrollTo({ top: 0, behavior: 'smooth' })
   } catch(e) { showSkeleton(false); toast(e.message) }
-  if (fade && !append) fadeMain(false)
+  if (fade) fadeMain(false)
 }
 
 // ── Grid rendering ─────────────────────────────────────────────────────────────
@@ -1759,7 +1781,7 @@ function makePhotoCard(photo, idx) {
     : ''
 
   item.innerHTML = `
-    <img src="${photo.url}" alt="${esc(photo.original_filename)}" loading="lazy"
+    <img src="${photo.thumb_url || photo.url}" alt="${esc(photo.original_filename)}" loading="lazy"
          class="w-full rounded-lg" />
     <div class="photo-overlay">
       <div class="flex items-end justify-between gap-1 flex-wrap">
@@ -1790,8 +1812,19 @@ function makeAlbumCard(album) {
   const deleteBtn = canDelete
     ? `<button data-album-name="${esc(album.name)}"
          onclick="event.stopPropagation();confirmDeleteAlbum(${album.id}, this.dataset.albumName, this)"
-         class="btn-danger-sm ml-auto">
+         class="btn-danger-sm">
          刪除
+       </button>`
+    : ''
+
+  const shareBtn = !isUncategorized
+    ? `<button onclick="event.stopPropagation();copyAlbumLink(${album.id}, this)"
+         title="複製分享連結"
+         class="album-copy-btn p-1.5 rounded-md text-sumi-300 hover:text-sakura-600 hover:bg-sakura-50 flex-shrink-0">
+         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                 d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+         </svg>
        </button>`
     : ''
 
@@ -1811,12 +1844,32 @@ function makeAlbumCard(album) {
           ? `<span class="pill bg-amber-50 text-amber-600 border border-amber-200">未辨識 ${album.unrecognized_count}</span>`
           : ''}
         ${ownerBadge}
-        ${deleteBtn}
+        <div class="ml-auto flex items-center gap-1">
+          ${shareBtn}
+          ${deleteBtn}
+        </div>
       </div>
     </div>`
 
   card.addEventListener('click', () => navAlbum(album))
   return card
+}
+
+function copyAlbumLink(albumId, btn) {
+  const url = window.location.origin + window.location.pathname + '?album=' + albumId
+  const showCheck = () => {
+    const orig = btn.innerHTML
+    btn.innerHTML = `<svg class="w-3.5 h-3.5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>`
+    setTimeout(() => { btn.innerHTML = orig }, 1600)
+  }
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => { toast('已複製相簿連結'); showCheck() }).catch(() => toast('複製失敗'))
+  } else {
+    const ta = document.createElement('textarea')
+    ta.value = url; ta.style.cssText = 'position:fixed;opacity:0'
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy')
+    document.body.removeChild(ta); toast('已複製相簿連結'); showCheck()
+  }
 }
 
 // ── Delete actions ─────────────────────────────────────────────────────────────
@@ -1999,7 +2052,7 @@ $('btn-upload').addEventListener('click', async () => {
            <span class="truncate text-sumi-400 max-w-xs">${esc(r.original_filename)}</span>
            <span class="ml-auto font-medium text-amber-500">辨識中</span>
          </div>`
-      : `<div class="text-xs text-red-500">${esc(r.original_filename)}: ${r.error || '失敗'}</div>`
+      : `<div class="text-xs text-red-500">${esc(r.original_filename)}: ${esc(r.error || '失敗')}</div>`
     ).join('')
 
     S.albums = await api.albums()
@@ -2056,13 +2109,54 @@ function setActiveTab(tab) {
   })
 }
 
-// ── Load more ──────────────────────────────────────────────────────────────────
-$('btn-load-more').addEventListener('click', async () => {
-  S.page++
-  $('btn-load-more').textContent = '載入中…'; $('btn-load-more').disabled = true
-  await loadStream(true)
-  $('btn-load-more').textContent = '載入更多'; $('btn-load-more').disabled = false
-})
+// ── Pagination ─────────────────────────────────────────────────────────────────
+function renderPagination(cur, total) {
+  const prev = $('btn-page-prev')
+  const next = $('btn-page-next')
+  prev.disabled = cur <= 1
+  next.disabled = cur >= total
+
+  const nums = $('page-numbers')
+  nums.innerHTML = ''
+
+  const pages = paginationRange(cur, total)
+  pages.forEach(p => {
+    if (p === '…') {
+      const span = document.createElement('span')
+      span.className = 'px-1.5 text-sumi-400 text-sm select-none'
+      span.textContent = '…'
+      nums.appendChild(span)
+    } else {
+      const btn = document.createElement('button')
+      btn.textContent = p
+      btn.className = p === cur
+        ? 'w-9 h-9 rounded-md text-sm font-semibold bg-sumi-800 text-white border border-sumi-800'
+        : 'w-9 h-9 rounded-md text-sm font-medium bg-white text-sumi-600 border border-sumi-200 hover:bg-sumi-50 transition-all'
+      btn.addEventListener('click', () => goToPage(p))
+      nums.appendChild(btn)
+    }
+  })
+}
+
+function paginationRange(cur, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages = []
+  pages.push(1)
+  if (cur > 3) pages.push('…')
+  for (let p = Math.max(2, cur - 1); p <= Math.min(total - 1, cur + 1); p++) pages.push(p)
+  if (cur < total - 2) pages.push('…')
+  pages.push(total)
+  return pages
+}
+
+async function goToPage(page) {
+  if (page < 1 || page > (S.totalPages || 1)) return
+  S.page = page
+  await loadStream(false)
+}
+
+$('btn-page-prev').addEventListener('click', () => goToPage(S.page - 1))
+$('btn-page-next').addEventListener('click', () => goToPage(S.page + 1))
 
 // ── Search ─────────────────────────────────────────────────────────────────────
 function handleSearch() {
@@ -2158,7 +2252,7 @@ function fadeMain(out) {
 function $(id) { return document.getElementById(id) }
 
 function esc(str) {
-  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;')
 }
 
 function showEl(id, show) {
@@ -2234,7 +2328,14 @@ async function init() {
     }
   }
   updateAuthUI()
+  // 在 navHome() 清掉 URL 之前先讀取 deep-link 參數
+  const albumParam = new URLSearchParams(window.location.search).get('album')
   await navHome()
+
+  if (albumParam) {
+    const targetAlbum = S.albums.find(a => a.id === parseInt(albumParam))
+    if (targetAlbum) await navAlbum(targetAlbum)
+  }
 
   if (animSettings.splash) {
     const remaining = animSettings.splashMinMs - (Date.now() - splashStart)
