@@ -4,7 +4,13 @@
 
 # Runtime data
 bib_recognition.db
+*.db
+*.sqlite3
 uploads/
 settings.json
 __pycache__/
+*.pyc
 venv/
+
+# Static logo (uploaded by admin at runtime)
+static/logo.*

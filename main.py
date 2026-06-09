@@ -69,6 +69,9 @@ Base.metadata.create_all(bind=engine)
 
 
 def _migrate():
+    # PRAGMA table_info is SQLite-only; PostgreSQL gets a fresh schema via create_all
+    if engine.dialect.name != "sqlite":
+        return
     with engine.connect() as conn:
         # v1 → v2: add album_id to photos
         cols = [r[1] for r in conn.execute(text("PRAGMA table_info(photos)")).fetchall()]

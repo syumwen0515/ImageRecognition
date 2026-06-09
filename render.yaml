@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: bib-recognition
+    runtime: docker
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bib-recognition-db
+          property: connectionString
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "20"
+
+databases:
+  - name: bib-recognition-db
+    databaseName: bib_recognition
+    plan: free
