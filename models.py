@@ -46,6 +46,7 @@ class Photo(Base):
     upload_time = Column(DateTime, default=datetime.utcnow, nullable=False)
     album_id = Column(Integer, ForeignKey("albums.id"), nullable=True)
     ocr_status = Column(String, default="done", nullable=False)  # pending | done | failed
+    storage_url = Column(String, nullable=True)  # Cloudinary URL; None = local disk
 
     album = relationship("Album", back_populates="photos")
     bib_numbers = relationship("BibNumber", back_populates="photo", cascade="all, delete-orphan")

@@ -15,7 +15,7 @@ from PIL import Image
 
 from fastapi import BackgroundTasks, Cookie, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -34,6 +34,47 @@ try:
     load_dotenv()
 except ImportError:
     pass
+
+# ── Cloudinary (optional cloud image storage) ─────────────────────────────────
+
+_CLOUDINARY_CONFIGURED = False
+
+try:
+    import cloudinary
+    import cloudinary.uploader
+    _cl_name   = os.getenv("CLOUDINARY_CLOUD_NAME")
+    _cl_key    = os.getenv("CLOUDINARY_API_KEY")
+    _cl_secret = os.getenv("CLOUDINARY_API_SECRET")
+    if _cl_name and _cl_key and _cl_secret:
+        cloudinary.config(cloud_name=_cl_name, api_key=_cl_key, api_secret=_cl_secret, secure=True)
+        _CLOUDINARY_CONFIGURED = True
+except ImportError:
+    pass
+
+
+def _cloudinary_upload(file_path: str, public_id: str) -> Optional[str]:
+    """Upload file to Cloudinary; returns the secure URL or None on failure."""
+    if not _CLOUDINARY_CONFIGURED:
+        return None
+    try:
+        result = cloudinary.uploader.upload(
+            file_path,
+            public_id=public_id,
+            resource_type="image",
+            overwrite=True,
+        )
+        return result.get("secure_url")
+    except Exception:
+        return None
+
+
+def _cloudinary_delete(public_id: str) -> None:
+    if not _CLOUDINARY_CONFIGURED:
+        return
+    try:
+        cloudinary.uploader.destroy(public_id, resource_type="image")
+    except Exception:
+        pass
 
 
 def _load_secret_key() -> str:
@@ -93,6 +134,11 @@ def _migrate():
         pcols = [r[1] for r in conn.execute(text("PRAGMA table_info(photos)")).fetchall()]
         if "ocr_status" not in pcols:
             conn.execute(text("ALTER TABLE photos ADD COLUMN ocr_status TEXT NOT NULL DEFAULT 'done'"))
+            conn.commit()
+        # v5 → v6: add storage_url to photos (Cloudinary or other remote storage URL)
+        pcols = [r[1] for r in conn.execute(text("PRAGMA table_info(photos)")).fetchall()]
+        if "storage_url" not in pcols:
+            conn.execute(text("ALTER TABLE photos ADD COLUMN storage_url TEXT"))
             conn.commit()
 
 
@@ -520,6 +566,8 @@ def delete_album(
 
     photos = db.query(Photo).filter(Photo.album_id == album_id).all()
     for photo in photos:
+        if photo.storage_url:
+            _cloudinary_delete(Path(photo.filename).stem)
         path = UPLOAD_DIR / photo.filename
         if path.exists():
             path.unlink()
@@ -549,6 +597,8 @@ def delete_photo(
         if not album or album.owner_id != current_user.id:
             raise HTTPException(403, "無權刪除此照片")
 
+    if photo.storage_url:
+        _cloudinary_delete(Path(photo.filename).stem)
     path = UPLOAD_DIR / photo.filename
     if path.exists():
         path.unlink()
@@ -714,6 +764,8 @@ def download_photo(photo_id: int, db: Session = Depends(get_db)):
     photo = db.query(Photo).filter(Photo.id == photo_id).first()
     if not photo:
         raise HTTPException(404, "Photo not found")
+    if photo.storage_url:
+        return RedirectResponse(url=photo.storage_url)
     path = UPLOAD_DIR / photo.filename
     if not path.exists():
         raise HTTPException(404, "File not found on disk")
@@ -743,13 +795,33 @@ async def reprocess_photos(
     recognized = 0
 
     for photo in photos:
-        path = UPLOAD_DIR / photo.filename
-        if not path.exists():
+        local_path = UPLOAD_DIR / photo.filename
+        temp_file: Optional[str] = None
+        if local_path.exists():
+            ocr_path = str(local_path)
+        elif photo.storage_url:
+            import tempfile
+            import urllib.request
+            suffix = Path(photo.filename).suffix or ".jpg"
+            fd, temp_file = tempfile.mkstemp(suffix=suffix)
+            os.close(fd)
+            try:
+                urllib.request.urlretrieve(photo.storage_url, temp_file)
+                ocr_path = temp_file
+            except Exception:
+                os.unlink(temp_file)
+                temp_file = None
+                continue
+        else:
             continue
+
         try:
-            bib_list = extract_bib_numbers(str(path))
+            bib_list = extract_bib_numbers(ocr_path)
         except Exception:
             bib_list = []
+        finally:
+            if temp_file and Path(temp_file).exists():
+                os.unlink(temp_file)
 
         db.query(BibNumber).filter(BibNumber.photo_id == photo.id).delete()
         for bib in bib_list:
@@ -945,11 +1017,19 @@ def factory_reset(
     if not _verify_password(req.password, current_user.hashed_password):
         raise HTTPException(400, "密碼不正確")
 
+    cloudinary_ids = [
+        Path(p.filename).stem
+        for p in db.query(Photo).filter(Photo.storage_url.isnot(None)).all()
+    ]
+
     db.query(BibNumber).delete()
     db.query(Photo).delete()
     db.query(Album).delete()
     db.query(User).delete()
     db.commit()
+
+    for cid in cloudinary_ids:
+        _cloudinary_delete(cid)
 
     for f in UPLOAD_DIR.iterdir():
         if f.is_file():
@@ -972,12 +1052,22 @@ def _process_ocr(photo_id: int, file_path: str) -> None:
         except Exception:
             bib_list = []
 
+        # Upload to Cloudinary while local file is still present
+        storage_url = _cloudinary_upload(file_path, Path(file_path).stem)
+
         photo = db.query(Photo).filter(Photo.id == photo_id).first()
         if photo:
             for bib in bib_list:
                 db.add(BibNumber(photo_id=photo_id, bib_number=bib))
             photo.ocr_status = "done"
+            if storage_url:
+                photo.storage_url = storage_url
             db.commit()
+
+        # Local file no longer needed once it's safely on Cloudinary
+        if storage_url:
+            Path(file_path).unlink(missing_ok=True)
+
     except Exception:
         db.rollback()
         try:
@@ -994,13 +1084,15 @@ def _process_ocr(photo_id: int, file_path: str) -> None:
 # ── Helper ────────────────────────────────────────────────────────────────────
 
 def _photo_dict(p: Photo) -> dict:
+    url = p.storage_url if p.storage_url else f"/uploads/{p.filename}"
+    file_exists = bool(p.storage_url) or (UPLOAD_DIR / p.filename).exists()
     return {
         "photo_id": p.id,
-        "url": f"/uploads/{p.filename}",
+        "url": url,
         "original_filename": p.original_filename,
         "bib_numbers": [b.bib_number for b in p.bib_numbers],
         "album_id": p.album_id,
         "upload_time": p.upload_time.isoformat(),
-        "file_exists": (UPLOAD_DIR / p.filename).exists(),
+        "file_exists": file_exists,
         "ocr_status": p.ocr_status,
     }

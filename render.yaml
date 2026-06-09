@@ -12,6 +12,12 @@ services:
         value: "true"
       - key: MAX_UPLOAD_SIZE_MB
         value: "20"
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
 
 databases:
   - name: bib-recognition-db
