@@ -162,8 +162,6 @@ EXT_BY_FORMAT = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp", "GIF": ".gif", 
 
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_SIZE_MB", "20")) * 1024 * 1024
 
-_USE_CLAUDE_API = bool(os.getenv("ANTHROPIC_API_KEY"))
-
 
 def _verify_image(raw: bytes) -> Optional[str]:
     """Return the verified image format (e.g. 'JPEG'), or None if not a real image."""
@@ -818,7 +816,7 @@ async def reprocess_photos(
             continue
 
         try:
-            bib_list = extract_bib_numbers(ocr_path, use_claude_api=_USE_CLAUDE_API)
+            bib_list = extract_bib_numbers(ocr_path)
         except Exception:
             bib_list = []
         finally:
@@ -1050,7 +1048,7 @@ def _process_ocr(photo_id: int, file_path: str) -> None:
     db = SessionLocal()
     try:
         try:
-            bib_list = extract_bib_numbers(file_path, use_claude_api=_USE_CLAUDE_API)
+            bib_list = extract_bib_numbers(file_path)
         except Exception:
             bib_list = []
 

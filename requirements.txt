@@ -20,7 +20,7 @@ cloudinary>=1.36.0
 #   pip install torch --index-url https://download.pytorch.org/whl/cpu
 #   pip install easyocr
 # easyocr>=1.7.1
-# Claude Vision API (cloud, highest accuracy) — enabled when ANTHROPIC_API_KEY is set
-anthropic>=0.40.0
+# Optional: Claude Vision API (cloud, highest accuracy)
+# anthropic>=0.40.0
 # Optional: Google Cloud Vision API (cloud)
 # google-cloud-vision>=3.4.0
