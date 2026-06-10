@@ -27,9 +27,9 @@ from pydantic import BaseModel
 from sqlalchemy import case, exists, func, text
 from sqlalchemy.orm import Session, selectinload
 
-from database import Base, SessionLocal, engine, get_db
-from models import Album, BibNumber, Photo, User
-from ocr_engine import extract_bib_numbers, gpu_info
+from .database import Base, SessionLocal, engine, get_db
+from .models import Album, BibNumber, Photo, User
+from .ocr_engine import extract_bib_numbers, gpu_info
 
 try:
     from dotenv import load_dotenv
@@ -562,7 +562,7 @@ def update_me(
 
 @app.get("/", include_in_schema=False)
 def serve_index():
-    return FileResponse("index.html")
+    return FileResponse("frontend/index.html")
 
 
 # ── Albums ────────────────────────────────────────────────────────────────────
@@ -1209,8 +1209,10 @@ def factory_reset(
             f.unlink(missing_ok=True)
     for f in STATIC_DIR.glob("logo.*"):
         f.unlink(missing_ok=True)
+    for f in STATIC_DIR.glob("favicon.*"):
+        f.unlink(missing_ok=True)
 
-    _save_settings({"site_title": "路跑相簿", "logo_url": None})
+    _save_settings({"site_title": "路跑相簿", "logo_url": None, "favicon_url": None})
 
     return {"reset": True}
 

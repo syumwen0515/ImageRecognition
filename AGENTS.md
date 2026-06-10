@@ -49,21 +49,21 @@ Client (browser)
     ├── GET /api/health                    → ok + GPU info
     └── GET /uploads/*                     → serve stored images (static)
 
-FastAPI (main.py)
-    ├── ocr_engine.py  → image preprocessing + EasyOCR / Tesseract / cloud OCR
-    ├── models.py      → SQLAlchemy ORM (User, Album, Photo, BibNumber)
-    └── database.py    → engine, session factory, Base
+FastAPI (app/main.py)
+    ├── app/ocr_engine.py  → image preprocessing + EasyOCR / Tesseract / cloud OCR
+    ├── app/models.py      → SQLAlchemy ORM (User, Album, Photo, BibNumber)
+    └── app/database.py    → engine, session factory, Base
 ```
 
 ## File Map
 
 | File | Role |
 |------|------|
-| `main.py` | FastAPI app, all API routes, startup init, SQLite migration |
-| `ocr_engine.py` | Public function `extract_bib_numbers(path, use_claude_api, use_vision_api)` |
-| `database.py` | `engine`, `SessionLocal`, `Base`, `get_db()` |
-| `models.py` | `User`, `Album`, `Photo`, `BibNumber` ORM models |
-| `index.html` | Single-page app (state machine, no framework, no build step) |
+| `app/main.py` | FastAPI app, all API routes, startup init, SQLite migration |
+| `app/ocr_engine.py` | Public function `extract_bib_numbers(path, use_claude_api, use_vision_api)` |
+| `app/database.py` | `engine`, `SessionLocal`, `Base`, `get_db()` |
+| `app/models.py` | `User`, `Album`, `Photo`, `BibNumber` ORM models |
+| `frontend/index.html` | Single-page app (state machine, no framework, no build step) |
 | `static/` | Stores logo image served at `/static/logo.*` |
 | `uploads/` | Auto-created at startup; stores uploaded images |
 | `settings.json` | Persisted site settings: `site_title`, `logo_url` |
@@ -109,7 +109,7 @@ Query pattern: `filter(~exists().where(BibNumber.photo_id == Photo.id))`
 
 One photo → many bib_number rows (one race photo can contain multiple runners).
 
-## OCR Pipeline (ocr_engine.py)
+## OCR Pipeline (app/ocr_engine.py)
 
 ### Primary: EasyOCR (deep learning)
 
@@ -173,14 +173,14 @@ python -m venv venv
 venv\Scripts\python.exe -m pip install -r requirements.txt
 
 # Every time
-venv\Scripts\uvicorn.exe main:app --reload --host 0.0.0.0 --port 8000
+venv\Scripts\uvicorn.exe app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 Tesseract must be installed separately: `winget install UB-Mannheim.TesseractOCR`
 
 ## Extending the Project
 
-**Switch to PostgreSQL**: set `DATABASE_URL` in `.env`; the `postgres://` → `postgresql://` rewrite is already in `database.py`.
+**Switch to PostgreSQL**: set `DATABASE_URL` in `.env`; the `postgres://` → `postgresql://` rewrite is already in `app/database.py`.
 
 **Enable GPU (EasyOCR)**: `pip install torch --index-url https://download.pytorch.org/whl/cu121 && pip install easyocr` — auto-detected at startup.
 

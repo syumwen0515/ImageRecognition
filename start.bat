@@ -56,6 +56,6 @@ echo   GPU acceleration: EasyOCR will auto-detect NVIDIA GPU.
 echo   Press Ctrl+C to stop.
 echo.
 
-venv\Scripts\uvicorn.exe main:app --reload --host 0.0.0.0 --port 8000
+venv\Scripts\uvicorn.exe app.main:app --reload --host 0.0.0.0 --port 8000
 
 pause

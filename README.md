@@ -61,7 +61,7 @@ cd "d:\Dev\影像辨識"
 ```powershell
 python -m venv venv
 venv\Scripts\python.exe -m pip install -r requirements.txt
-venv\Scripts\uvicorn.exe main:app --reload --host 0.0.0.0 --port 8000
+venv\Scripts\uvicorn.exe app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ---
@@ -70,11 +70,13 @@ venv\Scripts\uvicorn.exe main:app --reload --host 0.0.0.0 --port 8000
 
 ```
 影像辨識/
-├── main.py             # FastAPI 主程式（所有 API 路由、認證、相簿管理）
-├── ocr_engine.py       # OCR 核心（影像預處理 + EasyOCR / Tesseract / 雲端）
-├── database.py         # 資料庫連線設定
-├── models.py           # ORM 資料模型
-├── index.html          # 前端介面（純 HTML/JS，單頁應用）
+├── app/                # 後端原始碼（Python 套件）
+│   ├── main.py         # FastAPI 主程式（所有 API 路由、認證、相簿管理）
+│   ├── ocr_engine.py   # OCR 核心（影像預處理 + EasyOCR / Tesseract / 雲端）
+│   ├── database.py     # 資料庫連線設定
+│   └── models.py       # ORM 資料模型
+├── frontend/
+│   └── index.html      # 前端介面（純 HTML/JS，單頁應用）
 ├── requirements.txt    # Python 套件清單
 ├── start.bat           # Windows 一鍵啟動
 ├── Dockerfile          # Docker 映像（含 Tesseract）
