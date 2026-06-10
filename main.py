@@ -164,7 +164,11 @@ ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/bm
 # client-supplied filename or Content-Type header (both are attacker-controlled
 # and could otherwise be used to smuggle e.g. .svg/.html files that browsers
 # would render inline from /uploads, leading to stored XSS).
-EXT_BY_FORMAT = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp", "GIF": ".gif", "BMP": ".bmp"}
+# MPO ("Multi Picture Object") is the JPEG-based container some cameras (e.g.
+# Canon in-camera HDR / multi-shot noise reduction modes) save photos in. Pillow
+# reports it as format "MPO" rather than "JPEG", but decodes/converts it the
+# same way, so it's treated as a JPEG for storage purposes.
+EXT_BY_FORMAT = {"JPEG": ".jpg", "MPO": ".jpg", "PNG": ".png", "WEBP": ".webp", "GIF": ".gif", "BMP": ".bmp"}
 
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_SIZE_MB", "20")) * 1024 * 1024
 WEBP_QUALITY = int(os.getenv("WEBP_QUALITY", "85"))
@@ -177,6 +181,52 @@ def _verify_image(raw: bytes) -> Optional[str]:
         with Image.open(io.BytesIO(raw)) as img:
             img.verify()
             return img.format
+    except Exception:
+        # img.verify() can reject some valid images (e.g. JPEG variants from
+        # certain cameras carrying extra data) that Pillow can still decode
+        # fully, so fall back to a full decode before giving up.
+        try:
+            with Image.open(io.BytesIO(raw)) as img:
+                fmt = img.format
+                img.load()
+                return fmt
+        except Exception:
+            return None
+
+
+# Allowed MIME types and PIL format names for favicon uploads.
+# SVG is intentionally excluded: SVG files can embed <script> tags and would
+# constitute a stored-XSS vector if served from the same origin.
+_FAVICON_ALLOWED_MIME = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/x-icon",           # de-facto ICO MIME type (sent by most browsers)
+    "image/vnd.microsoft.icon", # official IANA MIME type for ICO
+}
+_FAVICON_ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP", "GIF", "BMP", "ICO"}
+
+
+def _verify_image_favicon(raw: bytes) -> Optional[str]:
+    """Like _verify_image but safely handles ICO files.
+
+    Pillow's img.verify() raises NotImplementedError for ICO in some versions,
+    so ICO is validated by attempting a full decode instead.
+    Returns the PIL format string on success, or None if the bytes are not a
+    recognised, decodable image.
+    """
+    try:
+        with Image.open(io.BytesIO(raw)) as img:
+            fmt = img.format
+            if fmt not in _FAVICON_ALLOWED_FORMATS:
+                return None
+            if fmt == "ICO":
+                # verify() is unreliable for ICO; force a full decode instead
+                img.load()
+            else:
+                img.verify()
+            return fmt
     except Exception:
         return None
 
@@ -199,12 +249,16 @@ def _to_webp(raw: bytes, max_width: int = 0) -> bytes:
 
 
 def _load_settings() -> dict:
+    defaults: dict = {"site_title": "路跑相簿", "logo_url": None, "favicon_url": None}
     if SETTINGS_FILE.exists():
         try:
-            return json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+            saved = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+            # Merge: saved values override defaults; keys absent in older installs
+            # (e.g. favicon_url) fall back gracefully to the default value.
+            return {**defaults, **saved}
         except Exception:
             pass
-    return {"site_title": "路跑相簿", "logo_url": None}
+    return defaults
 
 
 def _save_settings(s: dict) -> None:
@@ -613,6 +667,9 @@ def delete_album(
         path = UPLOAD_DIR / photo.filename
         if path.exists():
             path.unlink()
+        thumb_path = UPLOAD_DIR / photo.filename.replace(".webp", "_thumb.webp")
+        if thumb_path.exists():
+            thumb_path.unlink()
         db.delete(photo)
 
     db.delete(album)
@@ -644,6 +701,9 @@ def delete_photo(
     path = UPLOAD_DIR / photo.filename
     if path.exists():
         path.unlink()
+    thumb_path = UPLOAD_DIR / photo.filename.replace(".webp", "_thumb.webp")
+    if thumb_path.exists():
+        thumb_path.unlink()
     db.delete(photo)
     db.commit()
     return {"deleted": True, "photo_id": photo_id}
@@ -731,9 +791,6 @@ async def upload_photos(
         uid = uuid.uuid4()
         stored_name = f"{uid}.webp"
         dest = UPLOAD_DIR / stored_name
-        webp_bytes = _to_webp(raw)
-        dest.write_bytes(webp_bytes)
-        (UPLOAD_DIR / f"{uid}_thumb.webp").write_bytes(_to_webp(raw, max_width=THUMB_MAX_PX))
 
         photo = Photo(
             filename=stored_name,
@@ -747,7 +804,12 @@ async def upload_photos(
         db.commit()
         db.refresh(photo)
 
-        background_tasks.add_task(_process_ocr, photo.id, str(dest))
+        # WebP conversion (and OCR) run in the background so a large batch of
+        # files doesn't make the upload request hang until every image is
+        # transcoded — the client gets a fast response and can keep using the
+        # upload page right away. Photos without a converted file yet are
+        # shown as "processing" placeholders in the gallery until this completes.
+        background_tasks.add_task(_process_upload, photo.id, raw, str(dest))
 
         results.append({
             "original_filename": upload.filename,
@@ -971,6 +1033,74 @@ def delete_logo(current_user: User = Depends(_require_user)):
     return settings
 
 
+# ── Favicon endpoints ──────────────────────────────────────────────────────────
+
+@app.post("/api/settings/favicon")
+async def upload_favicon(
+    file: UploadFile = File(...),
+    current_user: User = Depends(_require_user),
+):
+    """Upload a custom browser-tab favicon (admin only).
+
+    Security hardening mirrors upload_logo():
+    - Role check before any I/O.
+    - MIME type allow-list (SVG excluded — SVG can embed <script>).
+    - Content-based format verification via Pillow, not just the
+      client-supplied Content-Type header (which is attacker-controlled).
+    - Hard 2 MB cap before buffering the full file in memory.
+    - Converted to WebP via _to_webp(), which strips EXIF metadata and
+      normalises pixel modes — the stored bytes never contain the original
+      potentially-crafted file.
+    - Old favicon files are removed before the new one is written to avoid
+      stale files accumulating in /static.
+    """
+    if current_user.role != "admin":
+        raise HTTPException(403, "管理員權限才能修改 Favicon")
+    if file.content_type not in _FAVICON_ALLOWED_MIME:
+        raise HTTPException(
+            400,
+            "不支援的圖片格式（請使用 PNG、JPG、WebP 或 ICO；不接受 SVG）",
+        )
+
+    raw = await file.read()
+
+    # Hard size limit — prevents memory exhaustion on oversized uploads.
+    # 2 MB is generous for a favicon (typical size is <100 KB).
+    _FAVICON_MAX_BYTES = 2 * 1024 * 1024
+    if len(raw) > _FAVICON_MAX_BYTES:
+        raise HTTPException(400, "Favicon 圖片不得超過 2 MB")
+
+    fmt = _verify_image_favicon(raw)
+    if fmt not in _FAVICON_ALLOWED_FORMATS:
+        raise HTTPException(400, "檔案內容不是有效的圖片，請確認檔案未損毀")
+
+    # Remove all existing favicon.* files before writing the new one.
+    for old in STATIC_DIR.glob("favicon.*"):
+        old.unlink(missing_ok=True)
+
+    # Convert to WebP: strips metadata, normalises pixel format, reduces size.
+    favicon_path = STATIC_DIR / "favicon.webp"
+    favicon_path.write_bytes(_to_webp(raw))
+
+    settings = _load_settings()
+    settings["favicon_url"] = "/static/favicon.webp"
+    _save_settings(settings)
+    return settings
+
+
+@app.delete("/api/settings/favicon")
+def delete_favicon(current_user: User = Depends(_require_user)):
+    """Remove the custom favicon and revert to the built-in SVG default (admin only)."""
+    if current_user.role != "admin":
+        raise HTTPException(403, "管理員權限才能修改 Favicon")
+    for old in STATIC_DIR.glob("favicon.*"):
+        old.unlink(missing_ok=True)
+    settings = _load_settings()
+    settings["favicon_url"] = None
+    _save_settings(settings)
+    return settings
+
+
 # ── Admin User Management ─────────────────────────────────────────────────────
 
 @app.get("/api/admin/users")
@@ -1086,6 +1216,32 @@ def factory_reset(
 
 
 # ── OCR background task ───────────────────────────────────────────────────────
+
+def _process_upload(photo_id: int, raw: bytes, dest_path: str) -> None:
+    """Convert the uploaded image (and thumbnail) to WebP, then run OCR.
+
+    Runs in a background task so the upload request can return as soon as the
+    file is validated and recorded, instead of blocking on transcoding.
+    """
+    try:
+        dest = Path(dest_path)
+        dest.write_bytes(_to_webp(raw))
+        (dest.parent / f"{dest.stem}_thumb.webp").write_bytes(_to_webp(raw, max_width=THUMB_MAX_PX))
+    except Exception:
+        db = SessionLocal()
+        try:
+            photo = db.query(Photo).filter(Photo.id == photo_id).first()
+            if photo:
+                photo.ocr_status = "failed"
+                db.commit()
+        except Exception:
+            db.rollback()
+        finally:
+            db.close()
+        return
+
+    _process_ocr(photo_id, dest_path)
+
 
 def _process_ocr(photo_id: int, file_path: str) -> None:
     db = SessionLocal()

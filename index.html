@@ -4,6 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>路跑相簿 | 號碼牌搜尋</title>
+  <meta name="description" content="路跑相簿：攝影師與跑者的共同回憶。輸入號碼牌即可快速搜尋您的賽事照片。" />
+  <meta property="og:title" content="路跑相簿" />
+  <meta property="og:description" content="攝影師與跑者的共同回憶。輸入號碼牌即可快速搜尋您的賽事照片。" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="路跑相簿" />
+  <meta name="twitter:description" content="攝影師與跑者的共同回憶。輸入號碼牌即可搜尋賽事照片。" />
+  <link id="favicon-link" rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%231C1917'/><rect x='4' y='12' width='24' height='15' rx='2' fill='%23A67E76'/><path d='M11 12 12.5 8.5h7L21 12z' fill='%23A67E76'/><circle cx='16' cy='19.5' r='4.5' fill='%23FAFAF9' opacity='.9'/><circle cx='16' cy='19.5' r='2.5' fill='%236F4F4A'/></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600;700&family=Noto+Sans+JP:wght@300;400;500;600&display=swap" rel="stylesheet" />
@@ -55,7 +63,11 @@
     #lightbox.open { opacity:1; pointer-events:auto; }
     @keyframes lbIn { from { opacity:0; transform:scale(.93) } to { opacity:1; transform:scale(1) } }
     body.anim-lightbox #lightbox.open #lightbox-img { animation: lbIn .24s cubic-bezier(.22,.68,0,1.1) forwards; }
-    #lightbox-img { max-width:90vw; max-height:85vh; border-radius:.5rem; object-fit:contain; }
+    #lightbox-img { max-width:90vw; max-height:85vh; border-radius:.5rem; object-fit:contain; transition: opacity .12s ease; }
+    #lightbox-img.lb-loading { opacity: 0; }
+    #lightbox-img-wrap { position: relative; display: flex; align-items: center; justify-content: center; min-height: 4rem; }
+    #lightbox-spinner { position: absolute; display: none; }
+    #lightbox-spinner.show { display: block; }
 
     /* Drop zone */
     #drop-zone.dragging { border-color:#A67E76; background:#FAF6F5; }
@@ -190,6 +202,18 @@
       0%, 100% { opacity: .3; transform: scale(1); }
       50%       { opacity: 1; transform: scale(1.25); }
     }
+
+    /* Album entry loading overlay (covers only the photo-grid area, below the header/search/tabs) */
+    #grid-area { position: relative; }
+    #album-loading {
+      position: absolute; inset: 0; z-index: 30; min-height: 40vh;
+      background: rgba(250,250,249,.92); backdrop-filter: blur(2px);
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity .3s ease;
+    }
+    #album-loading.hidden { display: none; }
+    #album-loading.loading-out { opacity: 0; pointer-events: none; }
+    .album-loading-spinner { animation: spin 1s linear infinite; }
 
     /* Page & card transitions */
     body.anim-page main { transition: opacity .2s ease; }
@@ -329,16 +353,20 @@
         <p id="reg-error" class="hidden text-xs text-red-500 text-center"></p>
       </div>
     </div>
-    <button onclick="closeAuthModal()"
-      class="absolute top-3 right-4 text-sumi-400 hover:text-sumi-700 text-xl font-light leading-none">×</button>
+    <button onclick="closeAuthModal()" aria-label="關閉"
+      class="absolute top-3 right-4 text-sumi-400 hover:text-sumi-700 transition-colors p-1 rounded">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
   </div>
 </div>
 
 <!-- ═══ DELETE CONFIRM MODAL ════════════════════════════════════════════════ -->
 <div id="delete-modal" class="modal-overlay" style="z-index:9200" onclick="if(event.target===this && _overlayMousedownOnSelf)closeDeleteModal()">
   <div class="bg-white rounded-xl shadow-xl w-full max-w-xs mx-4 p-6 text-center">
-    <div class="w-10 h-10 rounded-full bg-red-50 border border-red-100 flex items-center justify-center mx-auto mb-4">
-      <span class="text-red-500 font-bold text-sm select-none">!</span>
+    <div class="w-12 h-12 rounded-full bg-red-50 border border-red-100 flex items-center justify-center mx-auto mb-4">
+      <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
     </div>
     <h3 class="font-bold text-sumi-800 text-base mb-1" id="delete-title">確認刪除</h3>
     <p class="text-sm text-sumi-500 mb-5" id="delete-msg">此操作無法復原。</p>
@@ -360,7 +388,9 @@
         <h2 class="font-serif font-semibold text-sumi-800 text-lg">帳號設定</h2>
         <p class="text-xs text-sumi-400 mt-0.5">更新您的個人資料</p>
       </div>
-      <button onclick="closeSettingsModal()" class="text-sumi-400 hover:text-sumi-700 text-2xl leading-none">×</button>
+      <button onclick="closeSettingsModal()" aria-label="關閉" class="text-sumi-400 hover:text-sumi-700 transition-colors p-1 rounded">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
     </div>
     <div class="p-6 space-y-5">
       <div>
@@ -417,7 +447,9 @@
         <h2 class="font-serif font-semibold text-sumi-800 text-lg">管理控制台</h2>
         <p class="text-xs text-sumi-400 mt-0.5">網站設定與用戶管理</p>
       </div>
-      <button onclick="closeAdminModal()" class="text-sumi-400 hover:text-sumi-700 text-2xl leading-none">×</button>
+      <button onclick="closeAdminModal()" aria-label="關閉" class="text-sumi-400 hover:text-sumi-700 transition-colors p-1 rounded">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
     </div>
     <!-- Tabs -->
     <div class="flex border-b border-sumi-100 flex-shrink-0">
@@ -463,6 +495,31 @@
         </div>
 
         <p id="admin-settings-msg" class="hidden text-xs bg-green-50 text-green-700 rounded-md px-3 py-2"></p>
+
+        <!-- Favicon -->
+        <div class="border-t border-sumi-100 pt-6">
+          <p class="section-label mb-3">瀏覽器分頁圖示（Favicon）</p>
+          <div class="flex items-start gap-4 flex-wrap">
+            <div class="flex-shrink-0">
+              <div class="w-16 h-16 rounded-md border border-sumi-200 bg-sumi-50 flex items-center justify-center overflow-hidden relative" title="目前 Favicon 預覽">
+                <img id="favicon-preview" src="" alt="Favicon 預覽" class="hidden w-10 h-10 object-contain" />
+                <span id="favicon-placeholder">
+                  <svg class="w-8 h-8 text-sumi-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3" stroke-width="1.5"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.4-.6A2 2 0 019.66 5h4.68a2 2 0 011.664.89l.4.6A2 2 0 0018.07 7H19a2 2 0 012 2v7"/><circle cx="12" cy="14" r="2.5" stroke-width="1.5"/></svg>
+                </span>
+                <span id="favicon-default-badge" class="absolute bottom-0.5 right-0.5 text-[9px] bg-sumi-200 text-sumi-500 rounded px-1 leading-tight">預設</span>
+              </div>
+            </div>
+            <div class="space-y-2 flex-1 min-w-0">
+              <label class="block">
+                <span class="btn-ghost cursor-pointer inline-block text-sm px-4 py-2">選擇圖示檔案</span>
+                <input id="favicon-input" type="file" accept="image/png,image/jpeg,image/webp,image/x-icon,image/vnd.microsoft.icon" class="hidden" onchange="uploadFavicon()" />
+              </label>
+              <button id="btn-remove-favicon" onclick="removeFavicon()" class="hidden btn-danger-sm">恢復預設</button>
+              <p class="text-xs text-sumi-400">支援 PNG、JPG、WebP、ICO 格式（不支援 SVG）。建議使用 32×32 或 64×64 像素的正方形圖示。</p>
+            </div>
+          </div>
+          <p id="favicon-settings-msg" class="hidden text-xs bg-green-50 text-green-700 rounded-md px-3 py-2 mt-3"></p>
+        </div>
 
         <!-- Animation Settings -->
         <div class="border-t border-sumi-100 pt-6">
@@ -573,7 +630,9 @@
   <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
     <div class="px-6 py-4 border-b border-sumi-100 flex items-center justify-between">
       <h3 class="font-serif font-semibold text-red-700">原廠重置系統</h3>
-      <button onclick="closeFactoryResetModal()" class="text-sumi-400 hover:text-sumi-700 text-2xl leading-none">×</button>
+      <button onclick="closeFactoryResetModal()" aria-label="關閉" class="text-sumi-400 hover:text-sumi-700 transition-colors p-1 rounded">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
     </div>
     <div class="p-6 space-y-4">
       <p class="text-xs text-sumi-500 leading-relaxed">
@@ -604,7 +663,9 @@
   <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden">
     <div class="px-6 py-4 border-b border-sumi-100 flex items-center justify-between">
       <h3 class="font-serif font-semibold text-sumi-800">編輯用戶資料</h3>
-      <button onclick="closeUserEditModal()" class="text-sumi-400 hover:text-sumi-700 text-2xl leading-none">×</button>
+      <button onclick="closeUserEditModal()" aria-label="關閉" class="text-sumi-400 hover:text-sumi-700 transition-colors p-1 rounded">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
     </div>
     <div class="p-6 space-y-4">
       <input type="hidden" id="edit-user-id" />
@@ -679,6 +740,12 @@
       </div>
       <button id="btn-search" class="btn-primary whitespace-nowrap px-6 !py-3">搜尋</button>
     </div>
+    <p id="search-mode-hint" class="mt-2 text-xs text-sumi-400 tracking-wide pl-1">
+      <span class="inline-flex items-center gap-1">
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01"/></svg>
+        <span id="search-mode-hint-text">依名稱篩選相簿</span>
+      </span>
+    </p>
   </div>
 
   <!-- Search result header -->
@@ -768,41 +835,78 @@
     </div>
   </div>
 
-  <!-- Photo grid -->
-  <div id="photo-grid" class="masonry"></div>
+  <!-- Photo grid area (album-loading overlay covers only this section) -->
+  <div id="grid-area">
+    <!-- Photo grid -->
+    <div id="photo-grid" class="masonry"></div>
 
-  <!-- Skeleton -->
-  <div id="state-skeleton" class="hidden masonry-skeleton">
-    <div class="masonry-item skeleton h-52"></div>
-    <div class="masonry-item skeleton h-40"></div>
-    <div class="masonry-item skeleton h-64"></div>
-    <div class="masonry-item skeleton h-48"></div>
-    <div class="masonry-item skeleton h-56"></div>
-    <div class="masonry-item skeleton h-44"></div>
-  </div>
-
-  <!-- Empty state -->
-  <div id="state-empty" class="hidden text-center py-24">
-    <div class="w-11 h-11 rounded-full border border-sumi-200 flex items-center justify-center mx-auto mb-5">
-      <span class="text-sumi-400 text-lg select-none">·</span>
+    <!-- Skeleton -->
+    <div id="state-skeleton" class="hidden masonry-skeleton">
+      <div class="masonry-item skeleton h-52"></div>
+      <div class="masonry-item skeleton h-40"></div>
+      <div class="masonry-item skeleton h-64"></div>
+      <div class="masonry-item skeleton h-48"></div>
+      <div class="masonry-item skeleton h-56"></div>
+      <div class="masonry-item skeleton h-44"></div>
     </div>
-    <p id="empty-msg" class="text-base font-medium text-sumi-500 tracking-wide">尚無照片</p>
-    <p class="text-sm mt-1.5 text-sumi-400" id="empty-sub"></p>
+
+    <!-- Empty state -->
+    <div id="state-empty" class="hidden text-center py-24">
+      <div class="w-14 h-14 rounded-full bg-sumi-50 border border-sumi-200 flex items-center justify-center mx-auto mb-5">
+        <svg class="w-6 h-6 text-sumi-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+      </div>
+      <p id="empty-msg" class="text-base font-medium text-sumi-600 tracking-wide">尚無照片</p>
+      <p class="text-sm mt-1.5 text-sumi-500" id="empty-sub"></p>
+    </div>
+
+    <!-- Pagination -->
+    <div id="pagination-wrap" class="hidden mt-10 mb-4 flex items-center justify-center gap-1.5 flex-wrap">
+      <button id="btn-page-prev"
+        class="px-3 py-2 rounded-md border border-sumi-200 bg-white text-sumi-600 hover:bg-sumi-50
+               transition-all text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
+        ‹
+      </button>
+      <div id="page-numbers" class="flex items-center gap-1"></div>
+      <button id="btn-page-next"
+        class="px-3 py-2 rounded-md border border-sumi-200 bg-white text-sumi-600 hover:bg-sumi-50
+               transition-all text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
+        ›
+      </button>
+    </div>
+
+    <!-- ═══ ALBUM LOADING OVERLAY (covers only the grid area) ═══ -->
+    <div id="album-loading" class="hidden">
+      <div class="text-center select-none">
+        <svg class="album-loading-spinner w-9 h-9 text-sakura-400 mx-auto" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" opacity=".2"/>
+          <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <p id="album-loading-text" class="text-xs text-sumi-400 tracking-[.18em] mt-3">載入相簿中…</p>
+      </div>
+    </div>
   </div>
 
-  <!-- Pagination -->
-  <div id="pagination-wrap" class="hidden mt-10 mb-4 flex items-center justify-center gap-1.5 flex-wrap">
-    <button id="btn-page-prev"
-      class="px-3 py-2 rounded-md border border-sumi-200 bg-white text-sumi-600 hover:bg-sumi-50
-             transition-all text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
-      ‹
-    </button>
-    <div id="page-numbers" class="flex items-center gap-1"></div>
-    <button id="btn-page-next"
-      class="px-3 py-2 rounded-md border border-sumi-200 bg-white text-sumi-600 hover:bg-sumi-50
-             transition-all text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed">
-      ›
-    </button>
+  <!-- Home Hero (visible only on home view, hidden once inside an album) -->
+  <div id="home-hero" class="hidden mb-7">
+    <div class="bg-gradient-to-r from-sakura-50 to-sumi-50 border border-sumi-200 rounded-xl px-6 py-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+      <div class="flex-shrink-0 w-10 h-10 rounded-full bg-white border border-sakura-200 flex items-center justify-center shadow-sm">
+        <svg class="w-5 h-5 text-sakura-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="font-semibold text-sumi-800 text-sm tracking-wide">如何搜尋我的照片？</p>
+        <p class="text-xs text-sumi-500 mt-0.5 leading-relaxed">點選相簿後，在上方搜尋欄輸入您的<span class="text-sakura-600 font-medium">號碼牌數字</span>，即可從數千張照片中找到您的賽事紀念照。</p>
+      </div>
+      <button onclick="$('home-hero').classList.add('hidden')" aria-label="關閉提示"
+        class="flex-shrink-0 text-sumi-300 hover:text-sumi-500 transition-colors self-start sm:self-auto">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
   </div>
 
   <!-- Album grid -->
@@ -812,11 +916,19 @@
 
 <!-- ═══ LIGHTBOX ═════════════════════════════════════════════════════════════ -->
 <div id="lightbox" onclick="if(event.target===this && _overlayMousedownOnSelf)closeLightbox()">
-  <button onclick="lbPrev()" id="lb-prev"
-    class="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white
-           text-4xl select-none px-2 z-10 transition-colors">‹</button>
+  <button onclick="lbPrev()" id="lb-prev" aria-label="上一張"
+    class="absolute left-2 top-1/2 -translate-y-1/2 text-white/60 hover:text-white
+           z-10 transition-colors p-3 rounded-full hover:bg-white/10 select-none">
+    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+  </button>
   <div class="flex flex-col items-center gap-3 max-w-[90vw]">
-    <img id="lightbox-img" src="" alt="" />
+    <div id="lightbox-img-wrap">
+      <img id="lightbox-img" src="" alt="" />
+      <svg id="lightbox-spinner" class="album-loading-spinner w-8 h-8 text-sakura-300" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" opacity=".2"/>
+        <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
     <div class="flex items-center gap-3 flex-wrap justify-center">
       <span id="lb-filename" class="text-sumi-400 text-sm truncate max-w-xs"></span>
       <span id="lb-bibs" class="text-sakura-300 text-sm font-semibold"></span>
@@ -833,11 +945,15 @@
     </div>
     <span id="lb-counter" class="text-sumi-500 text-xs"></span>
   </div>
-  <button onclick="lbNext()" id="lb-next"
-    class="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white
-           text-4xl select-none px-2 z-10 transition-colors">›</button>
-  <button onclick="closeLightbox()"
-    class="absolute top-4 right-5 text-white/60 hover:text-white text-3xl leading-none transition-colors">×</button>
+  <button onclick="lbNext()" id="lb-next" aria-label="下一張"
+    class="absolute right-2 top-1/2 -translate-y-1/2 text-white/60 hover:text-white
+           z-10 transition-colors p-3 rounded-full hover:bg-white/10 select-none">
+    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+  </button>
+  <button onclick="closeLightbox()" aria-label="關閉"
+    class="absolute top-4 right-5 text-white/60 hover:text-white transition-colors p-2 rounded-full hover:bg-white/10">
+    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12"/></svg>
+  </button>
 </div>
 
 <!-- ═══ TOAST ════════════════════════════════════════════════════════════════ -->
@@ -943,9 +1059,11 @@ const S = {
 }
 
 // ── Site Settings ──────────────────────────────────────────────────────────────
+const _DEFAULT_FAVICON = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%231C1917'/><rect x='4' y='12' width='24' height='15' rx='2' fill='%23A67E76'/><path d='M11 12 12.5 8.5h7L21 12z' fill='%23A67E76'/><circle cx='16' cy='19.5' r='4.5' fill='%23FAFAF9' opacity='.9'/><circle cx='16' cy='19.5' r='2.5' fill='%236F4F4A'/></svg>"
+
 let siteSettings = (() => {
-  try { return { site_title: '路跑相簿', logo_url: null, ...JSON.parse(localStorage.getItem('rb_site') || '{}') } }
-  catch { return { site_title: '路跑相簿', logo_url: null } }
+  try { return { site_title: '路跑相簿', logo_url: null, favicon_url: null, ...JSON.parse(localStorage.getItem('rb_site') || '{}') } }
+  catch { return { site_title: '路跑相簿', logo_url: null, favicon_url: null } }
 })()
 
 async function loadSiteSettings() {
@@ -974,6 +1092,17 @@ function applySiteSettings() {
   } else {
     logo.classList.add('hidden')
     titleEl.classList.remove('hidden')
+  }
+
+  const faviconLink = document.getElementById('favicon-link')
+  if (faviconLink) {
+    if (siteSettings.favicon_url) {
+      faviconLink.href = siteSettings.favicon_url + '?t=' + Date.now()
+      faviconLink.type = 'image/x-icon'
+    } else {
+      faviconLink.href = _DEFAULT_FAVICON
+      faviconLink.type = 'image/svg+xml'
+    }
   }
 }
 
@@ -1353,6 +1482,8 @@ async function confirmFactoryReset() {
 
 function loadAdminSettings() {
   $('admin-site-title').value = siteSettings.site_title || ''
+
+  // Logo preview
   const preview = $('logo-preview')
   const placeholder = $('logo-placeholder')
   const removeBtn = $('btn-remove-logo')
@@ -1366,8 +1497,27 @@ function loadAdminSettings() {
     placeholder.classList.remove('hidden')
     removeBtn.classList.add('hidden')
   }
-  const msgEl = $('admin-settings-msg')
-  msgEl.classList.add('hidden')
+
+  // Favicon preview
+  const favPreview = $('favicon-preview')
+  const favPlaceholder = $('favicon-placeholder')
+  const favRemoveBtn = $('btn-remove-favicon')
+  const favDefaultBadge = $('favicon-default-badge')
+  if (siteSettings.favicon_url) {
+    favPreview.src = siteSettings.favicon_url + '?t=' + Date.now()
+    favPreview.classList.remove('hidden')
+    favPlaceholder.classList.add('hidden')
+    favRemoveBtn.classList.remove('hidden')
+    favDefaultBadge.classList.add('hidden')
+  } else {
+    favPreview.classList.add('hidden')
+    favPlaceholder.classList.remove('hidden')
+    favRemoveBtn.classList.add('hidden')
+    favDefaultBadge.classList.remove('hidden')
+  }
+
+  $('admin-settings-msg').classList.add('hidden')
+  $('favicon-settings-msg').classList.add('hidden')
 }
 
 async function saveAdminSettings() {
@@ -1403,6 +1553,33 @@ async function removeLogo() {
     applySiteSettings()
     loadAdminSettings()
     toast('Logo 已移除')
+  } catch(e) { toast(e.message) }
+}
+
+async function uploadFavicon() {
+  const file = $('favicon-input').files[0]
+  if (!file) return
+  const fd = new FormData()
+  fd.append('file', file)
+  try {
+    siteSettings = await _authPost('/api/settings/favicon', fd)
+    applySiteSettings()
+    loadAdminSettings()
+    const msg = $('favicon-settings-msg')
+    msg.textContent = 'Favicon 已更新'
+    msg.classList.remove('hidden')
+    clearTimeout(msg._t)
+    msg._t = setTimeout(() => msg.classList.add('hidden'), 3000)
+  } catch(e) { toast(e.message) }
+  $('favicon-input').value = ''
+}
+
+async function removeFavicon() {
+  try {
+    siteSettings = await _authDelete('/api/settings/favicon')
+    applySiteSettings()
+    loadAdminSettings()
+    toast('Favicon 已恢復為預設')
   } catch(e) { toast(e.message) }
 }
 
@@ -1532,6 +1709,7 @@ async function navHome() {
   if (window.location.search) history.pushState(null, '', window.location.pathname)
   $('bib-input').value = ''
   $('bib-input').placeholder = '搜尋相簿名稱…'
+  $('search-mode-hint-text').textContent = '依名稱篩選相簿'
   showEl('search-section', true)
   stopOcrPolling()
   showEl('ocr-banner', false)
@@ -1541,6 +1719,7 @@ async function navHome() {
 
   const grid = $('album-grid')
   grid.innerHTML = ''; grid.classList.remove('hidden')
+  $('home-hero').classList.remove('hidden')
 
   try {
     S.albums = await api.albums()
@@ -1562,6 +1741,7 @@ function navUpload() {
   setHeader(false); showTabsBar(false); showEl('search-header', false)
   setGridVisible(false); showEl('pagination-wrap', false); clearGrid()
   $('album-grid').classList.add('hidden')
+  $('home-hero').classList.add('hidden')
 
   _newAlbumFormVisible = false
   showEl('new-album-form', false)
@@ -1588,11 +1768,11 @@ function renderAlbumGrid(query) {
   if (!S.albums.length) {
     grid.innerHTML = `
       <div class="col-span-full text-center py-20">
-        <div class="w-12 h-12 rounded-full bg-sumi-100 flex items-center justify-center mx-auto mb-4">
-          <span class="text-sumi-400 text-lg select-none">·</span>
+        <div class="w-14 h-14 rounded-full bg-sumi-100 border border-sumi-200 flex items-center justify-center mx-auto mb-4">
+          <svg class="w-6 h-6 text-sumi-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         </div>
         <p class="text-base font-semibold text-sumi-500">尚無相簿</p>
-        <p class="text-sm mt-1 text-sumi-400">${Auth.isLoggedIn() ? '請點擊上方「上傳」建立第一個相簿' : '請登入後建立相簿'}</p>
+        <p class="text-sm mt-1 text-sumi-500">${Auth.isLoggedIn() ? '請點擊上方「上傳」建立第一個相簿' : '請登入後建立相簿'}</p>
       </div>`
     return
   }
@@ -1613,19 +1793,23 @@ function renderAlbumGrid(query) {
   })
 }
 
-async function navAlbum(album, tab = 'all') {
+async function navAlbum(album, tab = 'all', pushState = true) {
+  const loadingStart = _appReady ? albumLoadingShow() : null
+
   S.view = 'album'; S.album = album; S.tab = tab
   S.page = 1; S.photos = []; S.hasMore = false
 
-  history.pushState(null, '', '?album=' + album.id)
+  if (pushState) history.pushState(null, '', '?album=' + album.id)
   $('bib-input').value = ''
   $('bib-input').placeholder = `在「${album.name}」搜尋號碼…`
+  $('search-mode-hint-text').textContent = '輸入號碼牌數字搜尋照片（1–6 位數）'
   showEl('search-section', true)
   stopOcrPolling()
   showEl('ocr-banner', false)
   showEl('upload-view', false)
 
   $('album-grid').classList.add('hidden')
+  $('home-hero').classList.add('hidden')
   setHeader(true, album.name); showTabsBar(true); showEl('search-header', false)
   setActiveTab(tab)
   $('unrec-count').textContent = album.unrecognized_count > 0
@@ -1633,10 +1817,15 @@ async function navAlbum(album, tab = 'all') {
 
   await loadStream(false, true)
 
-  if (!album.is_uncategorized) {
+  if (!album.is_uncategorized && Auth.canManageAlbum(album)) {
     _get(`/api/albums/${album.id}/progress`).then(prog => {
       if (prog.pending > 0) startOcrPolling(album.id)
     }).catch(() => {})
+  }
+
+  if (loadingStart !== null) {
+    await waitForVisibleImages($('photo-grid'))
+    albumLoadingHide(loadingStart)
   }
 }
 
@@ -1757,8 +1946,21 @@ function _getAlbumOwner() {
   return album.owner_id
 }
 
+function makeProcessingCard(photo) {
+  const failed = photo.ocr_status === 'failed'
+  const item = document.createElement('div')
+  item.className = 'masonry-item'
+  item.innerHTML = `
+    <div class="w-full rounded-lg bg-sumi-100 flex flex-col items-center justify-center gap-2 py-12 px-3 text-sumi-400">
+      <span class="${failed ? '' : 'spin'} text-xl select-none">${failed ? '!' : '◐'}</span>
+      <span class="text-xs">${failed ? '處理失敗' : '轉檔處理中…'}</span>
+      <span class="text-[11px] truncate max-w-full">${esc(photo.original_filename)}</span>
+    </div>`
+  return item
+}
+
 function makePhotoCard(photo, idx) {
-  if (photo.file_exists === false) return null
+  if (photo.file_exists === false) return makeProcessingCard(photo)
 
   const item = document.createElement('div')
   item.className = 'masonry-item cursor-pointer'
@@ -1833,11 +2035,11 @@ function makeAlbumCard(album) {
     : ''
 
   card.innerHTML = `
-    <div class="${accentColor} h-1"></div>
+    <div class="${accentColor} h-1.5"></div>
     <div class="p-3 sm:p-5">
       <h3 class="font-medium ${isUncategorized ? 'text-sumi-400' : 'text-sumi-800'} leading-snug text-sm mb-2.5 tracking-wide">${esc(album.name)}</h3>
-      ${album.event_date ? `<p class="text-xs text-sumi-400 mb-1 tracking-wide">${album.event_date}</p>` : ''}
-      ${album.description ? `<p class="text-xs text-sumi-400 truncate mb-2.5">${esc(album.description)}</p>` : ''}
+      ${album.event_date ? `<p class="text-xs text-sumi-500 mb-1 tracking-wide">${album.event_date}</p>` : ''}
+      ${album.description ? `<p class="text-xs text-sumi-500 truncate mb-2.5">${esc(album.description)}</p>` : ''}
       <div class="flex flex-wrap gap-1.5 items-center mt-2">
         <span class="pill bg-sumi-100 text-sumi-600">${album.photo_count} 張</span>
         ${album.unrecognized_count > 0
@@ -1916,12 +2118,32 @@ function renderLightbox() {
   const p = S.photos[S.lbIdx]
   if (!p) return
   const img = $('lightbox-img')
-  if (animSettings.lightbox) {
-    img.style.animation = 'none'
-    img.getBoundingClientRect()
-    img.style.animation = ''
+  const spinner = $('lightbox-spinner')
+  // The previous photo's entrance animation may still be "forwards"-pinned
+  // at opacity:1, which has higher cascade priority than the .lb-loading
+  // class below and would let the old image keep showing on slow networks.
+  // Clear it first so the hide actually takes effect.
+  img.style.animation = 'none'
+  // Hide the previous photo immediately so it doesn't stay visible while
+  // the new one loads — show a spinner instead. The entrance animation
+  // (if enabled) replays once the new photo is actually ready.
+  img.classList.add('lb-loading')
+  spinner.classList.add('show')
+  const onReady = () => {
+    img.classList.remove('lb-loading')
+    spinner.classList.remove('show')
+    if (animSettings.lightbox) {
+      img.style.animation = 'none'
+      img.getBoundingClientRect()
+      img.style.animation = ''
+    } else {
+      img.style.animation = ''
+    }
   }
+  img.onload = onReady
+  img.onerror = onReady
   img.src = p.url
+  if (img.complete) onReady()
   $('lb-filename').textContent = p.original_filename
   $('lb-bibs').textContent = p.bib_numbers.length ? `號碼：${p.bib_numbers.join(', ')}` : '（未辨識）'
   $('lb-counter').textContent = `${S.lbIdx + 1} / ${S.photos.length}`
@@ -1956,6 +2178,16 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft')  lbPrev()
   if (e.key === 'ArrowRight') lbNext()
   if (e.key === 'Escape')     closeLightbox()
+})
+
+// Touch swipe support for lightbox
+let _lbTouchStartX = 0
+$('lightbox').addEventListener('touchstart', e => {
+  _lbTouchStartX = e.touches[0].clientX
+}, { passive: true })
+$('lightbox').addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - _lbTouchStartX
+  if (Math.abs(dx) > 50) dx < 0 ? lbNext() : lbPrev()
 })
 
 // ── Upload ─────────────────────────────────────────────────────────────────────
@@ -2045,12 +2277,12 @@ $('btn-upload').addEventListener('click', async () => {
       $('upload-pct').textContent = pct + '%'
     })
     $('upload-progress-wrap').classList.add('hidden')
-    $('upload-status').textContent = `已上傳 ${data.uploaded} 張，辨識中…`
+    $('upload-status').textContent = `已上傳 ${data.uploaded} 張，處理中…`
     $('upload-results').classList.remove('hidden')
     $('upload-results').innerHTML = data.results.map(r => r.success
       ? `<div class="flex gap-2 text-xs bg-sumi-50 rounded px-3 py-1.5">
            <span class="truncate text-sumi-400 max-w-xs">${esc(r.original_filename)}</span>
-           <span class="ml-auto font-medium text-amber-500">辨識中</span>
+           <span class="ml-auto font-medium text-amber-500">處理中</span>
          </div>`
       : `<div class="text-xs text-red-500">${esc(r.original_filename)}: ${esc(r.error || '失敗')}</div>`
     ).join('')
@@ -2063,7 +2295,7 @@ $('btn-upload').addEventListener('click', async () => {
       $('btn-go-to-album').onclick = () => navAlbum(targetAlbum)
     }
 
-    toast(`已上傳 ${data.uploaded} 張，正在背景辨識中`)
+    toast(`已上傳 ${data.uploaded} 張，正在背景處理中`)
     selectedFiles = []; $('file-list').innerHTML = ''; $('file-input').value = ''
     updateUploadBtn()
   } catch(e) {
@@ -2151,8 +2383,12 @@ function paginationRange(cur, total) {
 
 async function goToPage(page) {
   if (page < 1 || page > (S.totalPages || 1)) return
+  if (page === S.page) return
   S.page = page
+  const loadingStart = albumLoadingShow()
   await loadStream(false)
+  await waitForVisibleImages($('photo-grid'))
+  albumLoadingHide(loadingStart)
 }
 
 $('btn-page-prev').addEventListener('click', () => goToPage(S.page - 1))
@@ -2308,6 +2544,50 @@ async function refreshAlbumSelect(autoSelectId = null) {
   updateUploadBtn()
 }
 
+// ── Album entry loading overlay ─────────────────────────────────────────────────
+let _appReady = false
+
+const ALBUM_LOADING_MIN_MS = 350
+
+function albumLoadingShow() {
+  const overlay = $('album-loading')
+  overlay.classList.remove('loading-out', 'hidden')
+  return Date.now()
+}
+
+function albumLoadingHide(startTime) {
+  const overlay = $('album-loading')
+  const remaining = ALBUM_LOADING_MIN_MS - (Date.now() - startTime)
+  const doHide = () => {
+    overlay.classList.add('loading-out')
+    setTimeout(() => { overlay.classList.add('hidden') }, 300)
+  }
+  if (remaining > 0) setTimeout(doHide, remaining)
+  else doHide()
+}
+
+// Resolve once every currently-visible <img> in the container has finished
+// loading (or errored), so the loading overlay stays up until the photos the
+// user can actually see are ready. Off-screen lazy images don't block this.
+// A timeout guards against a slow/broken image hanging the overlay forever.
+const ALBUM_LOADING_IMG_TIMEOUT_MS = 6000
+
+function waitForVisibleImages(container, timeout = ALBUM_LOADING_IMG_TIMEOUT_MS) {
+  const imgs = Array.from(container.querySelectorAll('img')).filter(img => {
+    const r = img.getBoundingClientRect()
+    return r.bottom > 0 && r.top < window.innerHeight
+  })
+  if (!imgs.length) return Promise.resolve()
+  const loaded = Promise.all(imgs.map(img => {
+    if (img.complete) return Promise.resolve()
+    return new Promise(resolve => {
+      img.addEventListener('load', resolve, { once: true })
+      img.addEventListener('error', resolve, { once: true })
+    })
+  }))
+  return Promise.race([loaded, new Promise(resolve => setTimeout(resolve, timeout))])
+}
+
 // ── Init ───────────────────────────────────────────────────────────────────────
 async function init() {
   applyAnimSettings()
@@ -2343,7 +2623,19 @@ async function init() {
     splash.classList.add('splash-out')
     setTimeout(() => { splash.style.display = 'none' }, 580)
   }
+  _appReady = true
 }
+
+window.addEventListener('popstate', () => {
+  const albumParam = new URLSearchParams(window.location.search).get('album')
+  if (albumParam) {
+    const targetAlbum = S.albums.find(a => a.id === parseInt(albumParam))
+    if (targetAlbum) navAlbum(targetAlbum, 'all', false)
+    else navHome()
+  } else if (S.view !== 'home') {
+    navHome()
+  }
+})
 
 init()
 </script>

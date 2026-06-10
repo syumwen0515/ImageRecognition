@@ -14,3 +14,4 @@ venv/
 
 # Static logo (uploaded by admin at runtime)
 static/logo.*
+static/favicon.*
